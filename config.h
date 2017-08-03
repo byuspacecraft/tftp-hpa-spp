@@ -263,6 +263,9 @@ typedef int socklen_t;
 #endif
 #endif
 
+/* netspp/spp.h */
+#include <netspp/spp.h>
+
 /* netinet/in.h, and possible missing pieces */
 
 #include <netinet/in.h>
