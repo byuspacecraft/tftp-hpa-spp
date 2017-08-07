@@ -148,6 +148,14 @@ static void handle_exit(int sig)
     exit_signal = sig;
 }
 
+/* Simple function that takes a character buffer and spits out an integer */
+void ascii2spp(const char *buf)
+{
+    unsigned int apid;
+    sscanf(buf,"%d",&apid);
+    return apid;
+}
+
 /* Handle timeout signal or timeout event */
 void timer(int sig)
 {
@@ -525,60 +533,7 @@ int main(int argc, char **argv)
         }
         memset(&bindaddr4, 0, sizeof bindaddr4);
         bindaddr4.sspp_family = AF_SPP;
-        bindaddr4.sspp_addr.spp_apid = 1015/*TODO: INSERT VARIABLE WITH RECEIVING APID HERE */;
-        if (address) {
-            char *portptr = NULL, *eportptr;
-            int err;
-            struct servent *servent;
-            unsigned long port;
-
-            address = tfstrdup(address);
-            err = split_port(&address, &portptr);
-            switch (err) {
-                case AF_SPP:
-                case AF_UNSPEC:
-                    break;
-                default:
-                    syslog(LOG_ERR,
-                            "Numeric IPv6 addresses need to be enclosed in []");
-                    exit(EX_USAGE);
-            }
-            if (!portptr)
-                portptr = (char *)"tftp";
-            if (*address) {
-                if (fd4 >= 0) {
-                    bindaddr4.sspp_family = AF_SPP;
-                    err = set_sock_addr(address,
-                            (union sock_addr *)&bindaddr4, NULL);
-                    if (err) {
-                        syslog(LOG_ERR,
-                                "cannot resolve local IPv4 bind address: %s, %s",
-                                address, gai_strerror(err));
-                        exit(EX_NOINPUT);
-                    }
-                }
-            } else {
-                /* Default to using INADDR_ANY */
-            }
-
-            if (portptr && *portptr) {
-                servent = getservbyname(portptr, "udp");
-                if (servent) {
-                    if (fd4 >= 0)
-                        bindaddr4.sin_port = servent->s_port;
-                } else if ((port = strtoul(portptr, &eportptr, 0))
-                        && !*eportptr) {
-                    if (fd4 >= 0)
-                        bindaddr4.sin_port = htons(port);
-                } else if (!strcmp(portptr, "tftp")) {
-                    /* It's TFTP, we're OK */
-                } else {
-                    syslog(LOG_ERR, "cannot resolve local bind port: %s",
-                            portptr);
-                    exit(EX_NOINPUT);
-                }
-            }
-        }
+        bindaddr4.sspp_addr.spp_apid = ascii2spp(address);
 
         if (fd4 >= 0) {
             if (bind(fd4, (struct sockaddr *)&bindaddr4,
@@ -669,27 +624,9 @@ int main(int argc, char **argv)
         if (standalone) {
             if (fd4 >= 0) {
                 FD_SET(fd4, &readset);
-#ifdef __CYGWIN__
-                /* On Cygwin, select() on a nonblocking socket returns
-                   immediately, with a rv of 0! */
-                set_socket_nonblock(fd4, 0);
-#endif
-            }
-            if (fd6 >= 0) {
-                FD_SET(fd6, &readset);
-#ifdef __CYGWIN__
-                /* On Cygwin, select() on a nonblocking socket returns
-                   immediately, with a rv of 0! */
-                set_socket_nonblock(fd6, 0);
-#endif
             }
         } else { /* fd always 0 */
             fd = 0;
-#ifdef __CYGWIN__
-            /* On Cygwin, select() on a nonblocking socket returns
-               immediately, with a rv of 0! */
-            set_socket_nonblock(fd, 0);
-#endif
             FD_SET(fd, &readset);
         }
         tv_waittime.tv_sec = waittime;
@@ -717,11 +654,6 @@ int main(int argc, char **argv)
             else /* not in set ??? */
                 continue;
         }
-#ifdef __CYGWIN__
-        /* On Cygwin, select() on a nonblocking socket returns
-           immediately, with a rv of 0! */
-        set_socket_nonblock(fd, 0);
-#endif
 
         fromlen = sizeof(from);
         n = myrecvfrom(fd, buf, sizeof(buf), 0,
@@ -742,8 +674,6 @@ int main(int argc, char **argv)
         }
 
         if (standalone) {
-            if ((from.sa.sa_family == AF_SPP) &&
-                    (myaddr.si.sspp_addr.spp_apid == INADDR_ANY)) {
                 /* myrecvfrom() didn't capture the source address; but we might
                    have bound to a specific address, if so we should use it */
                 memcpy(SOCKADDR_P(&myaddr), &bindaddr4.sspp_addr,
@@ -835,9 +765,6 @@ int main(int argc, char **argv)
             syslog(LOG_ERR, "chroot: %m");
             exit(EX_OSERR);
         }
-#ifdef __CYGWIN__
-        chdir("/");             /* Cygwin chroot() bug workaround */
-#endif
     }
 #ifdef HAVE_SETREGID
     setrv = setregid(pw->pw_gid, pw->pw_gid);
@@ -859,18 +786,20 @@ int main(int argc, char **argv)
     }
 
     /* Process the request... */
-    if (pick_port_bind(peer, &myaddr, portrange_from, portrange_to) < 0) {
+    if (bind(peer, &myaddr->sa, SOCKLEN(myaddr)) < 0) {
         syslog(LOG_ERR, "bind: %m");
         exit(EX_IOERR);
     }
 
-    if (connect(peer, &from.sa, SOCKLEN(&from)) < 0) {
+    /* This isn't necessary in the TFTP version since we don't have source discovery
+     * if (connect(peer, &from.sa, SOCKLEN(&from)) < 0) {
         syslog(LOG_ERR, "connect: %m");
         exit(EX_IOERR);
-    }
+    }*/
 
     /* Disable path MTU discovery */
-    pmtu_discovery_off(peer);
+//    pmtu_discovery_off(peer);
+//    Not a thing in SPP
 
     tp = (struct tftphdr *)buf;
     tp_opcode = ntohs(tp->th_opcode);
