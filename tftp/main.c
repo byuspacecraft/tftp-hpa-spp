@@ -71,13 +71,8 @@ static const struct modes modes[] = {
 #define MODE_NETASCII (&modes[0])
 #define MODE_DEFAULT  MODE_NETASCII
 
-#ifdef HAVE_IPV6
-int ai_fam = AF_UNSPEC;
-int ai_fam_sock = AF_UNSPEC;
-#else
-int ai_fam = AF_INET;
-int ai_fam_sock = AF_INET;
-#endif
+int ai_fam = AF_SPP;
+int ai_fam_sock = AF_SPP;
 
 union sock_addr peeraddr;
 int f = -1;
@@ -222,13 +217,8 @@ int main(int argc, char *argv[])
             for (optx = &argv[arg][1]; *optx; optx++) {
                 switch (*optx) {
                 case '4':
-                    ai_fam = AF_INET;
+                    ai_fam = AF_SPP;
                     break;
-#ifdef HAVE_IPV6
-                case '6':
-                    ai_fam = AF_INET6;
-                    break;
-#endif
                 case 'v':
                     verbose = 1;
                     break;
@@ -315,7 +305,7 @@ int main(int argc, char *argv[])
     }
 
     if (ai_fam_sock == AF_UNSPEC)
-        ai_fam_sock = AF_INET;
+        ai_fam_sock = AF_SPP;
 
     f = socket(ai_fam_sock, SOCK_DGRAM, 0);
     if (f < 0) {
@@ -324,7 +314,7 @@ int main(int argc, char *argv[])
     }
     bzero(&sa, sizeof(sa));
     sa.sa.sa_family = ai_fam_sock;
-    if (pick_port_bind(f, &sa, portrange_from, portrange_to)) {
+    if (bind(f, &sa, sizeof(sa))) {
         perror("tftp: bind");
         exit(EX_OSERR);
     }
@@ -437,7 +427,7 @@ void setpeer(int argc, char *argv[])
             }
             bzero((char *)&sa, sizeof (sa));
             sa.sa.sa_family = ai_fam_sock;
-            if (pick_port_bind(f, &sa, portrange_from, portrange_to)) {
+            if (bind(f, &sa,sizeof(sa))) {
                 perror("tftp: bind");
                 exit(EX_OSERR);
             }
