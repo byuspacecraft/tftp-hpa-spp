@@ -66,11 +66,7 @@ int allow_severity = -1;        /* Don't log at all */
 static struct request_info wrap_request;
 #endif
 
-#ifdef HAVE_IPV6
-static int ai_fam = AF_UNSPEC;
-#else
-static int ai_fam = AF_INET;
-#endif
+static int ai_fam = AF_SPP;
 
 #define	TIMEOUT 1000000         /* Default timeout (us) */
 #define TRIES   6               /* Number of attempts to send each packet */
@@ -186,17 +182,17 @@ static struct rule *read_remap_rules(const char *file)
 static int lock_file(int fd, int lock_write)
 {
 #if defined(HAVE_FCNTL) && defined(HAVE_F_SETLK_DEFINITION)
-  struct flock fl;
+    struct flock fl;
 
-  fl.l_type   = lock_write ? F_WRLCK : F_RDLCK;
-  fl.l_whence = SEEK_SET;
-  fl.l_start  = 0;
-  fl.l_len    = 0;		/* Whole file */
-  return fcntl(fd, F_SETLK, &fl);
+    fl.l_type   = lock_write ? F_WRLCK : F_RDLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start  = 0;
+    fl.l_len    = 0;		/* Whole file */
+    return fcntl(fd, F_SETLK, &fl);
 #elif defined(HAVE_LOCK_SH_DEFINITION)
-  return flock(fd, lock_write ? LOCK_EX|LOCK_NB : LOCK_SH|LOCK_NB);
+    return flock(fd, lock_write ? LOCK_EX|LOCK_NB : LOCK_SH|LOCK_NB);
 #else
-  return 0;			/* Hope & pray... */
+    return 0;			/* Hope & pray... */
 #endif
 }
 
@@ -234,7 +230,7 @@ static void pmtu_discovery_off(int fd)
  * to account for time spent waiting.
  */
 static int recv_time(int s, void *rbuf, int len, unsigned int flags,
-                     unsigned long *timeout_us_p)
+        unsigned long *timeout_us_p)
 {
     fd_set fdset;
     struct timeval tmv, t0, t1;
@@ -259,7 +255,7 @@ static int recv_time(int s, void *rbuf, int len, unsigned int flags,
             gettimeofday(&t1, NULL);
 
             dt = (t1.tv_sec - t0.tv_sec) * 1000000 +
-		 (t1.tv_usec - t0.tv_usec);
+                (t1.tv_usec - t0.tv_usec);
             *timeout_us_p = timeout_left =
                 (dt >= timeout_us) ? 1 : (timeout_us - dt);
         } while (rv == -1 && err == EINTR);
@@ -293,22 +289,6 @@ static int split_port(char **ap, char **pp)
     int  ret = AF_UNSPEC;
 
     a = *ap;
-#ifdef HAVE_IPV6
-    if (is_numeric_ipv6(a)) {
-        if (*a++ != '[')
-            return -1;
-        *ap = a;
-        p = strrchr(a, ']');
-        if (!p)
-            return -1;
-        *p++ = 0;
-        a = p;
-        ret = AF_INET6;
-        p = strrchr(a, ':');
-        if (p)
-            *p++ = 0;
-    } else
-#endif
     {
         struct in_addr in;
 
@@ -316,7 +296,7 @@ static int split_port(char **ap, char **pp)
         if (p)
             *p++ = 0;
         if (inet_aton(a, &in))
-            ret = AF_INET;
+            ret = AF_SPP;
     }
     *pp = p;
     return ret;
@@ -325,10 +305,9 @@ static int split_port(char **ap, char **pp)
 enum long_only_options {
     OPT_VERBOSITY	= 256,
 };
-    
+
 static struct option long_options[] = {
-    { "ipv4",        0, NULL, '4' },
-    { "ipv6",        0, NULL, '6' },
+    { "spp",        0, NULL, '4' },
     { "create",      0, NULL, 'c' },
     { "secure",      0, NULL, 's' },
     { "permissive",  0, NULL, 'p' },
@@ -357,16 +336,8 @@ int main(int argc, char **argv)
     struct passwd *pw;
     struct options *opt;
     union sock_addr myaddr;
-    struct sockaddr_in bindaddr4;
-#ifdef HAVE_IPV6
-    struct sockaddr_in6 bindaddr6;
-    int force_ipv6 = 0;
-#endif
+    struct sockaddr_spp bindaddr4;
     int n;
-    int fd = -1;
-    int fd4 = -1;
-    int fd6 = -1;
-    int fdmax = 0;
     int standalone = 0;         /* Standalone (listen) mode */
     int nodaemon = 0;           /* Do not detach process */
     char *address = NULL;       /* Address to listen to */
@@ -394,123 +365,117 @@ int main(int argc, char **argv)
     srand(time(NULL) ^ getpid());
 
     while ((c = getopt_long(argc, argv, short_options, long_options, NULL))
-           != -1)
+            != -1)
         switch (c) {
-        case '4':
-            ai_fam = AF_INET;
-            break;
-#ifdef HAVE_IPV6
-        case '6':
-            ai_fam = AF_INET6;
-            force_ipv6 = 1;
-            break;
-#endif
-        case 'c':
-            cancreate = 1;
-            break;
-        case 's':
-            secure = 1;
-            break;
-        case 'p':
-            unixperms = 1;
-            break;
-        case 'l':
-            standalone = 1;
-            break;
-        case 'L':
-            standalone = 1;
-            nodaemon = 1;
-            break;
-        case 'a':
-            address = optarg;
-            break;
-        case 't':
-            waittime = atoi(optarg);
-            break;
-        case 'B':
-            {
-                char *vp;
-                max_blksize = (unsigned int)strtoul(optarg, &vp, 10);
-                if (max_blksize < 512 || max_blksize > MAX_SEGSIZE || *vp) {
-                    syslog(LOG_ERR,
-                           "Bad maximum blocksize value (range 512-%d): %s",
-                           MAX_SEGSIZE, optarg);
+            case '4':
+                ai_fam = AF_SPP;
+                break;
+            case 'c':
+                cancreate = 1;
+                break;
+            case 's':
+                secure = 1;
+                break;
+            case 'p':
+                unixperms = 1;
+                break;
+            case 'l':
+                standalone = 1;
+                break;
+            case 'L':
+                standalone = 1;
+                nodaemon = 1;
+                break;
+            case 'a':
+                address = optarg;
+                break;
+            case 't':
+                waittime = atoi(optarg);
+                break;
+            case 'B':
+                {
+                    char *vp;
+                    max_blksize = (unsigned int)strtoul(optarg, &vp, 10);
+                    if (max_blksize < 512 || max_blksize > MAX_SEGSIZE || *vp) {
+                        syslog(LOG_ERR,
+                                "Bad maximum blocksize value (range 512-%d): %s",
+                                MAX_SEGSIZE, optarg);
+                        exit(EX_USAGE);
+                    }
+                }
+                break;
+            case 'T':
+                {
+                    char *vp;
+                    unsigned long tov = strtoul(optarg, &vp, 10);
+                    if (tov < 10000UL || tov > 255000000UL || *vp) {
+                        syslog(LOG_ERR, "Bad timeout value: %s", optarg);
+                        exit(EX_USAGE);
+                    }
+                    rexmtval = timeout = tov;
+                    maxtimeout = rexmtval * TIMEOUT_LIMIT;
+                }
+                break;
+            case 'R':
+                {
+                    if (sscanf(optarg, "%u:%u", &portrange_from, &portrange_to)
+                            != 2 || portrange_from > portrange_to
+                            || portrange_to >= 65535) {
+                        syslog(LOG_ERR, "Bad port range: %s", optarg);
+                        exit(EX_USAGE);
+                    }
+                    portrange = 1;
+                }
+                break;
+            case 'u':
+                user = optarg;
+                break;
+            case 'U':
+                my_umask = strtoul(optarg, &ep, 8);
+                if (*ep) {
+                    syslog(LOG_ERR, "Invalid umask: %s", optarg);
                     exit(EX_USAGE);
                 }
-            }
-            break;
-        case 'T':
-            {
-                char *vp;
-                unsigned long tov = strtoul(optarg, &vp, 10);
-                if (tov < 10000UL || tov > 255000000UL || *vp) {
-                    syslog(LOG_ERR, "Bad timeout value: %s", optarg);
+                spec_umask = 1;
+                break;
+            case 'r':
+                for (opt = options; opt->o_opt; opt++) {
+                    if (!strcasecmp(optarg, opt->o_opt)) {
+                        opt->o_opt = "";    /* Don't support this option */
+                        break;
+                    }
+                }
+                if (!opt->o_opt) {
+                    syslog(LOG_ERR, "Unknown option: %s", optarg);
                     exit(EX_USAGE);
                 }
-                rexmtval = timeout = tov;
-                maxtimeout = rexmtval * TIMEOUT_LIMIT;
-            }
-            break;
-        case 'R':
-            {
-                if (sscanf(optarg, "%u:%u", &portrange_from, &portrange_to)
-                    != 2 || portrange_from > portrange_to
-                    || portrange_to >= 65535) {
-                    syslog(LOG_ERR, "Bad port range: %s", optarg);
-                    exit(EX_USAGE);
-                }
-                portrange = 1;
-            }
-            break;
-        case 'u':
-            user = optarg;
-            break;
-        case 'U':
-            my_umask = strtoul(optarg, &ep, 8);
-            if (*ep) {
-                syslog(LOG_ERR, "Invalid umask: %s", optarg);
-                exit(EX_USAGE);
-            }
-            spec_umask = 1;
-            break;
-        case 'r':
-            for (opt = options; opt->o_opt; opt++) {
-                if (!strcasecmp(optarg, opt->o_opt)) {
-                    opt->o_opt = "";    /* Don't support this option */
-                    break;
-                }
-            }
-            if (!opt->o_opt) {
-                syslog(LOG_ERR, "Unknown option: %s", optarg);
-                exit(EX_USAGE);
-            }
-            break;
+                break;
 #ifdef WITH_REGEX
-        case 'm':
-            if (rewrite_file) {
-                syslog(LOG_ERR, "Multiple -m options");
-                exit(EX_USAGE);
-            }
-            rewrite_file = optarg;
-            break;
+            case 'm':
+                if (rewrite_file) {
+                    syslog(LOG_ERR, "Multiple -m options");
+                    exit(EX_USAGE);
+                }
+                rewrite_file = optarg;
+                break;
 #endif
-        case 'v':
-            verbosity++;
-            break;
-        case OPT_VERBOSITY:
-            verbosity = atoi(optarg);
-            break;
-        case 'V':
-            /* Print configuration to stdout and exit */
-            printf("%s\n", TFTPD_CONFIG_STR);
-            exit(0);
-            break;
-        case 'P':
-            pidfile = optarg;
-            break;
-        default:
-            syslog(LOG_ERR, "Unknown option: '%c'", optopt);
-            break;
+            case 'v':
+                verbosity++;
+                break;
+            case OPT_VERBOSITY:
+                verbosity = atoi(optarg);
+                break;
+            case 'V':
+                /* Print configuration to stdout and exit */
+                printf("%s\n", TFTPD_CONFIG_STR);
+                exit(0);
+                break;
+            case 'P':
+                pidfile = optarg;
+                break;
+            default:
+                syslog(LOG_ERR, "Unknown option: '%c'", optopt);
+                break;
         }
 
     dirs = xmalloc((argc - optind + 1) * sizeof(char *));
@@ -553,42 +518,14 @@ int main(int argc, char **argv)
     /* If we're running standalone, set up the input port */
     if (standalone) {
         FILE *pf;
-#ifdef HAVE_IPV6
-        if (ai_fam != AF_INET6) {
-#endif
-            fd4 = socket(AF_INET, SOCK_DGRAM, 0);
-            if (fd4 < 0) {
-                syslog(LOG_ERR, "cannot open IPv4 socket: %m");
-                exit(EX_OSERR);
-            }
-#ifndef __CYGWIN__
-            set_socket_nonblock(fd4, 1);
-#endif
-            memset(&bindaddr4, 0, sizeof bindaddr4);
-            bindaddr4.sin_family = AF_INET;
-            bindaddr4.sin_addr.s_addr = INADDR_ANY;
-            bindaddr4.sin_port = htons(IPPORT_TFTP);
-#ifdef HAVE_IPV6
+        fd4 = socket(AF_SPP, SOCK_DGRAM, 0);
+        if (fd4 < 0) {
+            syslog(LOG_ERR, "cannot open SPP socket: %m");
+            exit(EX_OSERR);
         }
-        if (ai_fam != AF_INET) {
-            fd6 = socket(AF_INET6, SOCK_DGRAM, 0);
-            if (fd6 < 0) {
-                if (fd4 < 0) {
-                    syslog(LOG_ERR, "cannot open IPv6 socket: %m");
-                    exit(EX_OSERR);
-                } else {
-                    syslog(LOG_ERR,
-                           "cannot open IPv6 socket, disable IPv6: %m");
-                }
-            }
-#ifndef __CYGWIN__
-            set_socket_nonblock(fd6, 1);
-#endif
-            memset(&bindaddr6, 0, sizeof bindaddr6);
-            bindaddr6.sin6_family = AF_INET6;
-            bindaddr6.sin6_port = htons(IPPORT_TFTP);
-        }
-#endif
+        memset(&bindaddr4, 0, sizeof bindaddr4);
+        bindaddr4.sspp_family = AF_SPP;
+        bindaddr4.sspp_addr.spp_apid = 1015/*TODO: INSERT VARIABLE WITH RECEIVING APID HERE */;
         if (address) {
             char *portptr = NULL, *eportptr;
             int err;
@@ -598,77 +535,28 @@ int main(int argc, char **argv)
             address = tfstrdup(address);
             err = split_port(&address, &portptr);
             switch (err) {
-            case AF_INET:
-#ifdef HAVE_IPV6
-                if (fd6 >= 0) {
-                    close(fd6);
-                    fd6 = -1;
-                    if (ai_fam == AF_INET6) {
-                        syslog(LOG_ERR,
-                               "Address %s is not in address family AF_INET6",
-                               address);
-                        exit(EX_USAGE);
-                    }
-                    ai_fam = AF_INET;
-                }
-                break;
-            case AF_INET6:
-                if (fd4 >= 0) {
-                    close(fd4);
-                    fd4 = -1;
-                    if (ai_fam == AF_INET) {
-                        syslog(LOG_ERR,
-                               "Address %s is not in address family AF_INET",
-                               address);
-                        exit(EX_USAGE);
-                    }
-                    ai_fam = AF_INET6;
-                }
-                break;
-#endif
-            case AF_UNSPEC:
-                break;
-            default:
-                syslog(LOG_ERR,
-                       "Numeric IPv6 addresses need to be enclosed in []");
-                exit(EX_USAGE);
+                case AF_SPP:
+                case AF_UNSPEC:
+                    break;
+                default:
+                    syslog(LOG_ERR,
+                            "Numeric IPv6 addresses need to be enclosed in []");
+                    exit(EX_USAGE);
             }
             if (!portptr)
                 portptr = (char *)"tftp";
             if (*address) {
                 if (fd4 >= 0) {
-                    bindaddr4.sin_family = AF_INET;
+                    bindaddr4.sspp_family = AF_SPP;
                     err = set_sock_addr(address,
-                                        (union sock_addr *)&bindaddr4, NULL);
+                            (union sock_addr *)&bindaddr4, NULL);
                     if (err) {
                         syslog(LOG_ERR,
-                               "cannot resolve local IPv4 bind address: %s, %s",
-                               address, gai_strerror(err));
+                                "cannot resolve local IPv4 bind address: %s, %s",
+                                address, gai_strerror(err));
                         exit(EX_NOINPUT);
                     }
                 }
-#ifdef HAVE_IPV6
-                if (fd6 >= 0) {
-                    bindaddr6.sin6_family = AF_INET6;
-                    err = set_sock_addr(address,
-                                        (union sock_addr *)&bindaddr6, NULL);
-                    if (err) {
-                        if (fd4 >= 0) {
-                            syslog(LOG_ERR,
-                                   "cannot resolve local IPv6 bind address: %s"
-                                   "(%s); using IPv4 only",
-                                   address, gai_strerror(err));
-                            close(fd6);
-                            fd6 = -1;
-                        } else {
-                            syslog(LOG_ERR,
-                                   "cannot resolve local IPv6 bind address: %s"
-                                   "(%s)", address, gai_strerror(err));
-                            exit(EX_NOINPUT);
-                        }
-                    }
-                }
-#endif
             } else {
                 /* Default to using INADDR_ANY */
             }
@@ -678,23 +566,15 @@ int main(int argc, char **argv)
                 if (servent) {
                     if (fd4 >= 0)
                         bindaddr4.sin_port = servent->s_port;
-#ifdef HAVE_IPV6
-                    if (fd6 >= 0)
-                        bindaddr6.sin6_port = servent->s_port;
-#endif
                 } else if ((port = strtoul(portptr, &eportptr, 0))
-                           && !*eportptr) {
+                        && !*eportptr) {
                     if (fd4 >= 0)
                         bindaddr4.sin_port = htons(port);
-#ifdef HAVE_IPV6
-                    if (fd6 >= 0)
-                        bindaddr6.sin6_port = htons(port);
-#endif
                 } else if (!strcmp(portptr, "tftp")) {
                     /* It's TFTP, we're OK */
                 } else {
                     syslog(LOG_ERR, "cannot resolve local bind port: %s",
-                           portptr);
+                            portptr);
                     exit(EX_NOINPUT);
                 }
             }
@@ -702,35 +582,11 @@ int main(int argc, char **argv)
 
         if (fd4 >= 0) {
             if (bind(fd4, (struct sockaddr *)&bindaddr4,
-              sizeof(bindaddr4)) < 0) {
+                        sizeof(bindaddr4)) < 0) {
                 syslog(LOG_ERR, "cannot bind to local IPv4 socket: %m");
                 exit(EX_OSERR);
             }
         }
-#ifdef HAVE_IPV6
-        if (fd6 >= 0) {
-#if defined(IPV6_V6ONLY)
-            int on = 1;
-            if (fd4 >= 0 || force_ipv6)
-                if (setsockopt(fd6, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&on,
-                  sizeof(on)))
-                    syslog(LOG_ERR, "cannot setsockopt IPV6_V6ONLY %m");
-#endif
-            if (bind(fd6, (struct sockaddr *)&bindaddr6,
-              sizeof(bindaddr6)) < 0) {
-                if (fd4 >= 0) {
-                    syslog(LOG_ERR,
-                           "cannot bind to local IPv6 socket,"
-                           "IPv6 disabled: %m");
-                    close(fd6);
-                    fd6 = -1;
-                } else {
-                    syslog(LOG_ERR, "cannot bind to local IPv6 socket: %m");
-                    exit(EX_OSERR);
-                }
-            }
-        }
-#endif
         /* Daemonize this process */
         /* Note: when running in secure mode (-s), we must not chdir, since
            we are already in the proper directory. */
@@ -764,14 +620,7 @@ int main(int argc, char **argv)
         fdmax = 0;
         /* Note: on Cygwin, select() on a nonblocking socket becomes
            a nonblocking select. */
-#ifndef __CYGWIN__
-        set_socket_nonblock(fd, 1);
-#endif
     }
-
-    /* Disable path MTU discovery */
-    pmtu_discovery_off(fd);
-
     /* This means we don't want to wait() for children */
 #ifdef SA_NOCLDWAIT
     set_signal(SIGCHLD, SIG_IGN, SA_NOCLDSTOP | SA_NOCLDWAIT);
@@ -799,7 +648,7 @@ int main(int argc, char **argv)
             } else {
                 exit(0);
             }
-	}
+        }
 
         if (caught_sighup) {
             caught_sighup = 0;
@@ -849,7 +698,7 @@ int main(int argc, char **argv)
 
         /* Never time out if we're in standalone mode */
         rv = select(fdmax + 1, &readset, NULL, NULL,
-                    standalone ? NULL : &tv_waittime);
+                standalone ? NULL : &tv_waittime);
         if (rv == -1 && errno == EINTR)
             continue;           /* Signal caught, reloop */
 
@@ -876,7 +725,7 @@ int main(int argc, char **argv)
 
         fromlen = sizeof(from);
         n = myrecvfrom(fd, buf, sizeof(buf), 0,
-                       (struct sockaddr *)&from, &fromlen, &myaddr);
+                (struct sockaddr *)&from, &fromlen, &myaddr);
 
         if (n < 0) {
             if (E_WOULD_BLOCK(errno) || errno == EINTR) {
@@ -886,32 +735,19 @@ int main(int argc, char **argv)
                 exit(EX_IOERR);
             }
         }
-#ifdef HAVE_IPV6
-        if ((from.sa.sa_family != AF_INET) && (from.sa.sa_family != AF_INET6)) {
-            syslog(LOG_ERR, "received address was not AF_INET/AF_INET6,"
-                   " please check your inetd config");
-#else
-        if (from.sa.sa_family != AF_INET) {
-            syslog(LOG_ERR, "received address was not AF_INET,"
-                   " please check your inetd config");
-#endif
+        if (from.sa.sa_family != AF_SPP) {
+            syslog(LOG_ERR, "received address was not AF_SPP,"
+                    " please check your inetd config");
             exit(EX_PROTOCOL);
         }
 
         if (standalone) {
-            if ((from.sa.sa_family == AF_INET) &&
-              (myaddr.si.sin_addr.s_addr == INADDR_ANY)) {
+            if ((from.sa.sa_family == AF_SPP) &&
+                    (myaddr.si.sspp_addr.spp_apid == INADDR_ANY)) {
                 /* myrecvfrom() didn't capture the source address; but we might
                    have bound to a specific address, if so we should use it */
-                memcpy(SOCKADDR_P(&myaddr), &bindaddr4.sin_addr,
-                       sizeof(bindaddr4.sin_addr));
-#ifdef HAVE_IPV6
-            } else if ((from.sa.sa_family == AF_INET6) &&
-		       IN6_IS_ADDR_UNSPECIFIED((struct in6_addr *)
-					       SOCKADDR_P(&myaddr))) {
-		memcpy(SOCKADDR_P(&myaddr), &bindaddr6.sin6_addr,
-		       sizeof(bindaddr6.sin6_addr));
-#endif
+                memcpy(SOCKADDR_P(&myaddr), &bindaddr4.sspp_addr,
+                        sizeof(bindaddr4.sspp_addr));
             }
         }
 
@@ -945,13 +781,13 @@ int main(int argc, char **argv)
     /* Verify if this was a legal request for us.  This has to be
        done before the chroot, while /etc is still accessible. */
     request_init(&wrap_request,
-                 RQ_DAEMON, __progname,
-                 RQ_FILE, fd,
-                 RQ_CLIENT_SIN, &from, RQ_SERVER_SIN, &myaddr, 0);
+            RQ_DAEMON, __progname,
+            RQ_FILE, fd,
+            RQ_CLIENT_SIN, &from, RQ_SERVER_SIN, &myaddr, 0);
     sock_methods(&wrap_request);
 
     tmp_p = (char *)inet_ntop(myaddr.sa.sa_family, SOCKADDR_P(&myaddr),
-                              tmpbuf, INET6_ADDRSTRLEN);
+            tmpbuf, INET6_ADDRSTRLEN);
     if (!tmp_p) {
         tmp_p = tmpbuf;
         strcpy(tmpbuf, "???");
@@ -1058,11 +894,11 @@ struct formats {
 };
 static const struct formats formats[] = {
     {
-    "netascii", rewrite_access, validate_access, tftp_sendfile,
-            tftp_recvfile, 1}, {
-    "octet", rewrite_access, validate_access, tftp_sendfile,
+        "netascii", rewrite_access, validate_access, tftp_sendfile,
+        tftp_recvfile, 1}, {
+            "octet", rewrite_access, validate_access, tftp_sendfile,
             tftp_recvfile, 0}, {
-    NULL, NULL, NULL, NULL, NULL, 0}
+                NULL, NULL, NULL, NULL, NULL, 0}
 };
 
 /*
@@ -1113,29 +949,29 @@ int tftp(struct tftphdr *tp, int size)
                 exit(0);
             }
             if (!(filename =
-                  (*pf->f_rewrite) (origfilename, tp_opcode,
-                                    &errmsgptr))) {
+                        (*pf->f_rewrite) (origfilename, tp_opcode,
+                            &errmsgptr))) {
                 nak(EACCESS, errmsgptr);        /* File denied by mapping rule */
                 exit(0);
             }
             if (verbosity >= 1) {
                 tmp_p = (char *)inet_ntop(from.sa.sa_family, SOCKADDR_P(&from),
-                                          tmpbuf, INET6_ADDRSTRLEN);
+                        tmpbuf, INET6_ADDRSTRLEN);
                 if (!tmp_p) {
                     tmp_p = tmpbuf;
                     strcpy(tmpbuf, "???");
                 }
                 if (filename == origfilename
-                    || !strcmp(filename, origfilename))
+                        || !strcmp(filename, origfilename))
                     syslog(LOG_NOTICE, "%s from %s filename %s\n",
-                           tp_opcode == WRQ ? "WRQ" : "RRQ",
-                           tmp_p, filename);
+                            tp_opcode == WRQ ? "WRQ" : "RRQ",
+                            tmp_p, filename);
                 else
                     syslog(LOG_NOTICE,
-                           "%s from %s filename %s remapped to %s\n",
-                           tp_opcode == WRQ ? "WRQ" : "RRQ",
-                           tmp_p, origfilename,
-                           filename);
+                            "%s from %s filename %s remapped to %s\n",
+                            tp_opcode == WRQ ? "WRQ" : "RRQ",
+                            tmp_p, origfilename,
+                            filename);
             }
             ecode =
                 (*pf->f_validate) (filename, tp_opcode, pf, &errmsgptr);
@@ -1209,14 +1045,14 @@ static int set_blksize2(uintmax_t *vp)
         sz = max_blksize;
     else
 
-    /* Convert to a power of two */
-    if (sz & (sz - 1)) {
-        unsigned int sz1 = 1;
-        /* Not a power of two - need to convert */
-        while (sz >>= 1)
-            sz1 <<= 1;
-        sz = sz1;
-    }
+        /* Convert to a power of two */
+        if (sz & (sz - 1)) {
+            unsigned int sz1 = 1;
+            /* Not a power of two - need to convert */
+            while (sz >>= 1)
+                sz1 <<= 1;
+            sz = sz1;
+        }
 
     *vp = segsize = sz;
     blksize_set = 1;
@@ -1229,9 +1065,9 @@ static int set_blksize2(uintmax_t *vp)
 static int set_rollover(uintmax_t *vp)
 {
     uintmax_t ro = *vp;
-    
+
     if (ro > 65535)
-	return 0;
+        return 0;
 
     rollover_val = (uint16_t)ro;
     return 1;
@@ -1316,23 +1152,23 @@ static void do_opt(const char *opt, const char *val, char **ap)
     errno = 0;
     v = strtoumax(val, &vend, 10);
     if (*vend || errno == ERANGE)
-	return;
+        return;
 
     for (po = options; po->o_opt; po++)
         if (!strcasecmp(po->o_opt, opt)) {
             if (po->o_fnc(&v)) {
-		optlen = strlen(opt);
-		retlen = sprintf(retbuf, "%"PRIuMAX, v);
+                optlen = strlen(opt);
+                retlen = sprintf(retbuf, "%"PRIuMAX, v);
 
                 if (p + optlen + retlen + 2 >= ackbuf + sizeof(ackbuf)) {
                     nak(EOPTNEG, "Insufficient space for options");
                     exit(0);
                 }
-		
-		memcpy(p, opt, optlen+1);
-		p += optlen+1;
-		memcpy(p, retbuf, retlen+1);
-		p += retlen+1;
+
+                memcpy(p, opt, optlen+1);
+                p += optlen+1;
+                memcpy(p, retbuf, retlen+1);
+                p += retlen+1;
             } else {
                 nak(EOPTNEG, "Unsupported option(s) requested");
                 exit(0);
@@ -1358,40 +1194,28 @@ static int rewrite_macros(char macro, char *output)
     int l=0;
 
     switch (macro) {
-    case 'i':
-        p = (char *)inet_ntop(from.sa.sa_family, SOCKADDR_P(&from),
-                              tb, INET6_ADDRSTRLEN);
-        if (output && p)
-            strcpy(output, p);
-        if (!p)
-            return 0;
-        else
-            return strlen(p);
+        case 'i':
+            p = (char *)inet_ntop(from.sa.sa_family, SOCKADDR_P(&from),
+                    tb, INET6_ADDRSTRLEN);
+            if (output && p)
+                strcpy(output, p);
+            if (!p)
+                return 0;
+            else
+                return strlen(p);
 
-    case 'x':
-        if (output) {
-            if (from.sa.sa_family == AF_INET) {
-                sprintf(output, "%08lX",
-                    (unsigned long)ntohl(from.si.sin_addr.s_addr));
-                l = 8;
-#ifdef HAVE_IPV6
-            } else {
-                unsigned char *c = (unsigned char *)SOCKADDR_P(&from);
-                p = tb;
-                for (l = 0; l < 16; l++) {
-                    sprintf(p, "%02X", *c);
-                    c++;
-                    p += 2;
+        case 'x':
+            if (output) {
+                if (from.sa.sa_family == AF_SPP) {
+                    sprintf(output, "%08lX",
+                            (unsigned long)ntohl(from.si.sspp_addr.spp_apid));
+                    l = 8;
                 }
-                strcpy(output, tb);
-                l = strlen(tb);
-#endif
             }
-        }
-        return l;
+            return l;
 
-    default:
-        return -1;
+        default:
+            return -1;
     }
 }
 
@@ -1403,8 +1227,8 @@ static char *rewrite_access(char *filename, int mode, const char **msg)
     if (rewrite_rules) {
         char *newname =
             rewrite_string(filename, rewrite_rules,
-			   mode != RRQ ? 'P' : 'G',
-                           rewrite_macros, msg);
+                    mode != RRQ ? 'P' : 'G',
+                    rewrite_macros, msg);
         filename = newname;
     }
     return filename;
@@ -1432,7 +1256,7 @@ static FILE *file;
  * given as we have no login directory.
  */
 static int validate_access(char *filename, int mode,
-			   const struct formats *pf, const char **errmsg)
+        const struct formats *pf, const char **errmsg)
 {
     struct stat stbuf;
     int i, len;
@@ -1486,15 +1310,15 @@ static int validate_access(char *filename, int mode,
     fd = open(filename, mode == RRQ ? rmode : wmode, 0666);
     if (fd < 0) {
         switch (errno) {
-        case ENOENT:
-        case ENOTDIR:
-            return ENOTFOUND;
-        case ENOSPC:
-            return ENOSPACE;
-        case EEXIST:
-            return EEXISTS;
-        default:
-            return errno + 100;
+            case ENOENT:
+            case ENOTDIR:
+                return ENOTFOUND;
+            case ENOSPC:
+                return ENOSPACE;
+            case EEXIST:
+                return EEXISTS;
+            default:
+                return errno + 100;
         }
     }
 
@@ -1503,7 +1327,7 @@ static int validate_access(char *filename, int mode,
 
     /* A duplicate RRQ or (worse!) WRQ packet could really cause havoc... */
     if (lock_file(fd, mode != RRQ))
-	exit(0);
+        exit(0);
 
     if (mode == RRQ) {
         if (!unixperms && (stbuf.st_mode & (S_IREAD >> 6)) == 0) {
@@ -1522,11 +1346,11 @@ static int validate_access(char *filename, int mode,
         }
 
 #ifdef HAVE_FTRUNCATE
-	/* We didn't get to truncate the file at open() time */
-	if (ftruncate(fd, (off_t) 0)) {
-	  *errmsg = "Cannot reset file size";
-	  return (EACCESS);
-	}
+        /* We didn't get to truncate the file at open() time */
+        if (ftruncate(fd, (off_t) 0)) {
+            *errmsg = "Cannot reset file size";
+            return (EACCESS);
+        }
 #endif
         tsize = 0;
         tsize_ok = 1;
@@ -1558,7 +1382,7 @@ static void tftp_sendfile(const struct formats *pf, struct tftphdr *oap, int oac
     if (oap) {
         timeout = rexmtval;
         (void)sigsetjmp(timeoutbuf, 1);
-      oack:
+oack:
         r_timeout = timeout;
         if (send(peer, oap, oacklen, 0) != oacklen) {
             syslog(LOG_WARNING, "tftpd: oack: %m\n");
@@ -1576,7 +1400,7 @@ static void tftp_sendfile(const struct formats *pf, struct tftphdr *oap, int oac
 
             if (ap_opcode == ERROR) {
                 syslog(LOG_WARNING,
-                       "tftp: client does not accept options\n");
+                        "tftp: client does not accept options\n");
                 goto abort;
             }
             if (ap_opcode == ACK) {
@@ -1634,10 +1458,10 @@ static void tftp_sendfile(const struct formats *pf, struct tftphdr *oap, int oac
             }
 
         }
-	if (!++block)
-	  block = rollover_val;
+        if (!++block)
+            block = rollover_val;
     } while (size == segsize);
-  abort:
+abort:
     (void)fclose(file);
 }
 
@@ -1673,9 +1497,9 @@ static void tftp_recvfile(const struct formats *pf, struct tftphdr *oap, int oac
             oap = NULL;
         }
         if (!++block)
-	  block = rollover_val;
+            block = rollover_val;
         (void)sigsetjmp(timeoutbuf, 1);
-      send_ack:
+send_ack:
         r_timeout = timeout;
         if (send(peer, ackbuf, acksize, 0) != acksize) {
             syslog(LOG_WARNING, "tftpd: write(ack): %m");
@@ -1724,11 +1548,11 @@ static void tftp_recvfile(const struct formats *pf, struct tftphdr *oap, int oac
     timeout_quit = 0;
 
     if (n >= 4 &&               /* if read some data */
-        dp_opcode == DATA &&    /* and got a data block */
-        block == dp_block) {    /* then my last ack was lost */
+            dp_opcode == DATA &&    /* and got a data block */
+            block == dp_block) {    /* then my last ack was lost */
         (void)send(peer, ackbuf, 4, 0); /* resend final ack */
     }
-  abort:
+abort:
     return;
 }
 
@@ -1781,13 +1605,13 @@ static void nak(int error, const char *msg)
 
     if (verbosity >= 2) {
         tmp_p = (char *)inet_ntop(from.sa.sa_family, SOCKADDR_P(&from),
-                                  tmpbuf, INET6_ADDRSTRLEN);
+                tmpbuf, INET6_ADDRSTRLEN);
         if (!tmp_p) {
             tmp_p = tmpbuf;
             strcpy(tmpbuf, "???");
         }
         syslog(LOG_INFO, "sending NAK (%d, %s) to %s",
-               error, tp->th_msg, tmp_p);
+                error, tp->th_msg, tmp_p);
     }
 
     if (send(peer, buf, length, 0) != length)
