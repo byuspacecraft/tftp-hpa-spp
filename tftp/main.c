@@ -308,7 +308,8 @@ int main(int argc, char *argv[])
     }
     bzero(&sa, sizeof(sa));
     sa.sa.sa_family = ai_fam_sock;
-    if (bind(f, &sa, sizeof(sa))) {
+    ((struct sockaddr_spp *) &sa.sa)->sspp_addr.spp_apid = ascii2spp(peerargv[1]);
+    if (bind(f, (struct sockaddr *) &sa, sizeof(sa))) {
         perror("tftp: bind");
         exit(EX_OSERR);
     }
@@ -400,7 +401,7 @@ void setpeer(int argc, char *argv[])
     peeraddr.sa.sa_family = ai_fam;
 /*    err = set_sock_addr(argv[1], &peeraddr, &hostname);*/
     /* Need to do an SPP thing here. */
-    ((struct sockaddr_spp *) &peeraddr.sa)->sspp_addr.spp_apid = ascii2spp(hostname);
+    ((struct sockaddr_spp *) &peeraddr.sa)->sspp_addr.spp_apid = ascii2spp(argv[1]);
     ai_fam = peeraddr.sa.sa_family;
     if (f == -1) { /* socket not open */
         ai_fam_sock = ai_fam;
@@ -417,7 +418,7 @@ void setpeer(int argc, char *argv[])
             }
             bzero((char *)&sa, sizeof (sa));
             sa.sa.sa_family = ai_fam_sock;
-            if (bind(f, &sa,sizeof(sa))) {
+            if (bind(f, (struct sockaddr *) &sa,sizeof(sa))) {
                 perror("tftp: bind");
                 exit(EX_OSERR);
             }

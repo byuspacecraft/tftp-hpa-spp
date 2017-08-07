@@ -105,7 +105,7 @@ void tftp_sendfile(int fd, const char *name, const char *mode)
         if (trace)
             tpacket("sent", dp, size + 4);
         n = sendto(f, dp, size + 4, 0,
-                   &peeraddr.sa, SOCKLEN(&peeraddr));
+                   (struct sockaddr *) &peeraddr.sa, sizeof(peeraddr.sa));
         if (n != size + 4) {
             perror("tftp: sendto");
             goto abort;
@@ -123,7 +123,6 @@ void tftp_sendfile(int fd, const char *name, const char *mode)
                 perror("tftp: recvfrom");
                 goto abort;
             }
-            sa_set_port(&peeraddr, SOCKPORT(&from));  /* added */
             if (trace)
                 tpacket("received", ap, n);
             /* should verify packet came from server */
@@ -207,8 +206,8 @@ void tftp_recvfile(int fd, const char *name, const char *mode)
       send_ack:
         if (trace)
             tpacket("sent", ap, size);
-        if (sendto(f, ackbuf, size, 0, &peeraddr.sa,
-                   SOCKLEN(&peeraddr)) != size) {
+        if (sendto(f, ackbuf, size, 0, (struct sockaddr *) &peeraddr.sa,
+                   sizeof(peeraddr.sa)) != size) {
             alarm(0);
             perror("tftp: sendto");
             goto abort;
