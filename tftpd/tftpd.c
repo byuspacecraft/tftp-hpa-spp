@@ -683,20 +683,21 @@ int main(int argc, char **argv)
                 memcpy(SOCKADDR_P(&myaddr), &bindaddr4.sspp_addr,
                         sizeof(bindaddr4.sspp_addr));
             }
-        }
 
         /*
          * Now that we have read the request packet from the UDP
          * socket, we fork and go back to listening to the socket.
          */
-        pid = fork();
+        pid = vfork();
         if (pid < 0) {
             syslog(LOG_ERR, "fork: %m");
             exit(EX_OSERR);     /* Return to inetd, just in case */
-        } else if (pid == 0)
-            break;              /* Child exit, parent loop */
+        } 
+        else if (pid == 0){
+            break;
+        }
+        /* Child exit, parent loop */
     }
-
     /* Child process: handle the actual request here */
 
     /* Ignore SIGHUP */
@@ -790,7 +791,7 @@ int main(int argc, char **argv)
     }
 
     /* Process the request... */
-    if (bind(peer, &myaddr->sa, SOCKLEN(myaddr)) < 0) {
+    if (bind(peer, (struct sockaddr * ) &myaddr.sa, sizeof(myaddr.sa)) < 0) {
         syslog(LOG_ERR, "bind: %m");
         exit(EX_IOERR);
     }
@@ -1138,14 +1139,14 @@ static int rewrite_macros(char macro, char *output)
                 return strlen(p);
 
         case 'x':
-            if (output) {
+            /*if (output) {
                 if (from.sa.sa_family == AF_SPP) {
                     sprintf(output, "%08lX",
                             (unsigned long)ntohl(from.si.sspp_addr.spp_apid));
                     l = 8;
                 }
-            }
-            return l;
+            }*/
+            return 0;
 
         default:
             return -1;
