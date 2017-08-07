@@ -149,10 +149,10 @@ static void handle_exit(int sig)
 }
 
 /* Simple function that takes a character buffer and spits out an integer */
-void ascii2spp(const char *buf)
+unsigned int ascii2spp(const char *sppbuf)
 {
     unsigned int apid;
-    sscanf(buf,"%d",&apid);
+    sscanf(sppbuf,"%d",&apid);
     return apid;
 }
 
@@ -346,6 +346,10 @@ int main(int argc, char **argv)
     union sock_addr myaddr;
     struct sockaddr_spp bindaddr4;
     int n;
+    int fd = -1;
+    int fd4 = -1;
+    int fd6 = -1;
+    int fdmax = 0;
     int standalone = 0;         /* Standalone (listen) mode */
     int nodaemon = 0;           /* Do not detach process */
     char *address = NULL;       /* Address to listen to */
