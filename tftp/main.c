@@ -195,6 +195,13 @@ static inline void usage(int errcode)
     exit(errcode);
 }
 
+unsigned int ascii2spp(const char *sppbuf)
+{
+    unsigned int apid;
+    sscanf(sppbuf,"%d",&apid);
+    return apid;
+}
+
 int main(int argc, char *argv[])
 {
     union sock_addr sa;
@@ -281,19 +288,6 @@ int main(int argc, char *argv[])
 
     pargv = argv + arg;
     pargc = argc - arg;
-
-    sp = getservbyname("tftp", "udp");
-    if (sp == 0) {
-        /* Use canned values */
-        if (verbose)
-            fprintf(stderr,
-                    "tftp: tftp/udp: unknown service, faking it...\n");
-        sp = xmalloc(sizeof(struct servent));
-        sp->s_name = (char *)"tftp";
-        sp->s_aliases = NULL;
-        sp->s_port = htons(IPPORT_TFTP);
-        sp->s_proto = (char *)"udp";
-    }
 
     bsd_signal(SIGINT, intr);
 
@@ -404,13 +398,9 @@ void setpeer(int argc, char *argv[])
     }
 
     peeraddr.sa.sa_family = ai_fam;
-    err = set_sock_addr(argv[1], &peeraddr, &hostname);
-    if (err) {
-        printf("Error: %s\n", gai_strerror(err));
-        printf("%s: unknown host\n", argv[1]);
-        connected = 0;
-        return;
-    }
+/*    err = set_sock_addr(argv[1], &peeraddr, &hostname);*/
+    /* Need to do an SPP thing here. */
+    ((struct sockaddr_spp *) &peeraddr.sa)->sspp_addr.spp_apid = ascii2spp(hostname);
     ai_fam = peeraddr.sa.sa_family;
     if (f == -1) { /* socket not open */
         ai_fam_sock = ai_fam;
@@ -433,33 +423,13 @@ void setpeer(int argc, char *argv[])
             }
         }
     }
-    port = sp->s_port;
-    if (argc == 3) {
-        struct servent *usp;
-        usp = getservbyname(argv[2], "udp");
-        if (usp) {
-            port = usp->s_port;
-        } else {
-            unsigned long myport;
-            char *ep;
-            myport = strtoul(argv[2], &ep, 10);
-            if (*ep || myport > 65535UL) {
-                printf("%s: bad port number\n", argv[2]);
-                connected = 0;
-                return;
-            }
-            port = htons((u_short) myport);
-        }
-    }
 
     if (verbose) {
         char tmp[INET6_ADDRSTRLEN], *tp;
-        tp = (char *)inet_ntop(peeraddr.sa.sa_family, SOCKADDR_P(&peeraddr),
-                               tmp, INET6_ADDRSTRLEN);
         if (!tp)
             tp = (char *)"???";
-        printf("Connected to %s (%s), port %u\n",
-               hostname, tp, (unsigned int)ntohs(port));
+        printf("Connected to %s (%s)\n",
+               hostname, tp);
     }
     connected = 1;
 }
