@@ -418,6 +418,7 @@ void setpeer(int argc, char *argv[])
             }
             bzero((char *)&sa, sizeof (sa));
             sa.sa.sa_family = ai_fam_sock;
+            ((struct sockaddr_spp *) &sa.sa)->sspp_addr.spp_apid = ascii2spp(argv[2]);
             if (bind(f, (struct sockaddr *) &sa,sizeof(sa))) {
                 perror("tftp: bind");
                 exit(EX_OSERR);
