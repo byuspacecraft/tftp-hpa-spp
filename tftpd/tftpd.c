@@ -692,7 +692,7 @@ int main(int argc, char **argv)
         if (pid < 0) {
             syslog(LOG_ERR, "fork: %m");
             exit(EX_OSERR);     /* Return to inetd, just in case */
-        } 
+        }
         else if (pid == 0){
             break;
         }

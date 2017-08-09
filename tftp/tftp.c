@@ -105,7 +105,7 @@ void tftp_sendfile(int fd, const char *name, const char *mode)
         if (trace)
             tpacket("sent", dp, size + 4);
         n = sendto(f, dp, size + 4, 0,
-                   (struct sockaddr *) &peeraddr.sa, sizeof(peeraddr.sa));
+                   (struct sockaddr *) &peeraddr.sa, sizeof(struct sockaddr_spp));
         if (n != size + 4) {
             perror("tftp: sendto");
             goto abort;
@@ -206,8 +206,9 @@ void tftp_recvfile(int fd, const char *name, const char *mode)
       send_ack:
         if (trace)
             tpacket("sent", ap, size);
-        if (sendto(f, ackbuf, size, 0, (struct sockaddr *) &peeraddr.sa,
-                   sizeof(peeraddr.sa)) != size) {
+
+        if (sendto(f, ackbuf, size, 0, (struct sockaddr *) &(peeraddr.sa),
+                    sizeof(struct sockaddr_spp)) != size) {
             alarm(0);
             perror("tftp: sendto");
             goto abort;
@@ -264,8 +265,8 @@ void tftp_recvfile(int fd, const char *name, const char *mode)
   abort:                       /* ok to ack, since user */
     ap->th_opcode = htons((u_short) ACK);       /* has seen err msg */
     ap->th_block = htons((u_short) block);
-    (void)sendto(f, ackbuf, 4, 0, (struct sockaddr *)&peeraddr,
-                 SOCKLEN(&peeraddr));
+    (void)sendto(f, ackbuf, 4, 0, (struct sockaddr *) &peeraddr.sa,
+                 sizeof(struct sockaddr_spp));
     write_behind(file, convert);        /* flush last buffer */
     fclose(file);
     stopclock();
@@ -341,7 +342,7 @@ static void nak(int error, const char *msg)
     if (trace)
         tpacket("sent", tp, length);
     if (sendto(f, ackbuf, length, 0, &peeraddr.sa,
-               SOCKLEN(&peeraddr)) != length)
+               sizeof(struct sockaddr_spp)) != length)
         perror("nak");
 }
 

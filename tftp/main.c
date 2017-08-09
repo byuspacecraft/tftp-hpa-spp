@@ -204,7 +204,7 @@ unsigned int ascii2spp(const char *sppbuf)
 
 int main(int argc, char *argv[])
 {
-    union sock_addr sa;
+    union sock_addr sa; // our address
     int arg;
     static int pargc, peerargc;
     static int iscmd = 0;
@@ -219,6 +219,7 @@ int main(int argc, char *argv[])
     peerargv[0] = argv[0];
     peerargc = 1;
 
+    // Options come before addresses
     for (arg = 1; !iscmd && arg < argc; arg++) {
         if (argv[arg][0] == '-') {
             for (optx = &argv[arg][1]; *optx; optx++) {
@@ -308,7 +309,9 @@ int main(int argc, char *argv[])
     }
     bzero(&sa, sizeof(sa));
     sa.sa.sa_family = ai_fam_sock;
-    ((struct sockaddr_spp *) &sa.sa)->sspp_addr.spp_apid = ascii2spp(peerargv[1]);
+
+    printf("Setting local address to %s\n", peerargv[2]);
+    ((struct sockaddr_spp *) &sa.sa)->sspp_addr.spp_apid = ascii2spp(peerargv[2]);
     if (bind(f, (struct sockaddr *) &sa, sizeof(sa))) {
         perror("tftp: bind");
         exit(EX_OSERR);
@@ -386,7 +389,6 @@ static void getmoreargs(const char *partial, const char *mprompt)
 void setpeer(int argc, char *argv[])
 {
     int err;
-
     if (argc < 2) {
         getmoreargs("connect ", "(to) ");
         makeargv();
@@ -401,6 +403,7 @@ void setpeer(int argc, char *argv[])
     peeraddr.sa.sa_family = ai_fam;
 /*    err = set_sock_addr(argv[1], &peeraddr, &hostname);*/
     /* Need to do an SPP thing here. */
+    printf("Setting peer to %s\n", argv[1]);
     ((struct sockaddr_spp *) &peeraddr.sa)->sspp_addr.spp_apid = ascii2spp(argv[1]);
     ai_fam = peeraddr.sa.sa_family;
     if (f == -1) { /* socket not open */
