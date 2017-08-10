@@ -69,7 +69,7 @@ static struct request_info wrap_request;
 static int ai_fam = AF_SPP;
 
 #define	TIMEOUT 1000000         /* Default timeout (us) */
-#define TRIES   6               /* Number of attempts to send each packet */
+#define TRIES   6               /* Number of attempts to  each packet */
 #define TIMEOUT_LIMIT ((1 << TRIES)-1)
 
 const char *__progname;
@@ -88,8 +88,9 @@ static unsigned int max_blksize = MAX_SEGSIZE;
 
 static char tmpbuf[INET6_ADDRSTRLEN], *tmp_p;
 
-static union sock_addr from;
-static socklen_t fromlen;
+static struct sockaddr_spp clientaddr;
+static socklen_t clientaddrlen;
+
 static off_t tsize;
 static int tsize_ok;
 
@@ -156,6 +157,12 @@ unsigned int ascii2spp(const char *sppbuf)
     return apid;
 }
 
+/* get a character buffer from an spp address */
+void spp2ascii(char *buf, const spp_address *addr)
+{
+    snprintf(buf,sizeof(buf),"%d",addr->spp_apid);
+}
+
 /* Handle timeout signal or timeout event */
 void timer(int sig)
 {
@@ -174,7 +181,7 @@ static struct rule *read_remap_rules(const char *file)
 
     f = fopen(file, "rt");
     if (!f) {
-        syslog(LOG_ERR, "Cannot open map file: %s: %m", file);
+        syslog(LOG_ERR, "Cannot open map file: %s: - %s", file, strerror(errno));
         exit(EX_NOINPUT);
     }
     rulep = parserulefile(f);
@@ -219,7 +226,7 @@ static void set_socket_nonblock(int fd, int flag)
     err = (ioctl(fd, FIONBIO, &flags) < 0);
 #endif
     if (err) {
-        syslog(LOG_ERR, "Cannot set nonblock flag on socket: %m");
+        syslog(LOG_ERR, "Cannot set nonblock flag on socket: - %s", strerror(errno));
         exit(EX_OSERR);
     }
 }
@@ -325,6 +332,7 @@ static struct option long_options[] = {
     { "listen",      0, NULL, 'l' },
     { "foreground",  0, NULL, 'L' },
     { "address",     1, NULL, 'a' },
+    { "client-address", 1, NULL, 'd' },
     { "blocksize",   1, NULL, 'B' },
     { "user",        1, NULL, 'u' },
     { "umask",       1, NULL, 'U' },
@@ -336,14 +344,13 @@ static struct option long_options[] = {
     { "pidfile",     1, NULL, 'P' },
     { NULL, 0, NULL, 0 }
 };
-static const char short_options[] = "46cspvVlLa:B:u:U:r:t:T:R:m:P:";
+static const char short_options[] = "46cspvVlLa:d:B:u:U:r:t:T:R:m:P:";
 
 int main(int argc, char **argv)
 {
     struct tftphdr *tp;
     struct passwd *pw;
     struct options *opt;
-    union sock_addr myaddr;
     struct sockaddr_spp bindaddr4;
     int n;
     int fd = -1;
@@ -353,6 +360,7 @@ int main(int argc, char **argv)
     int standalone = 0;         /* Standalone (listen) mode */
     int nodaemon = 0;           /* Do not detach process */
     char *address = NULL;       /* Address to listen to */
+    char *fromaddress = NULL;   /* Address to send to */
     pid_t pid;
     mode_t my_umask = 0;
     int spec_umask = 0;
@@ -372,7 +380,7 @@ int main(int argc, char **argv)
     p = strrchr(argv[0], '/');
     __progname = (p && p[1]) ? p + 1 : argv[0];
 
-    openlog(__progname, LOG_PID | LOG_NDELAY, LOG_DAEMON);
+    openlog(__progname, LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
 
     srand(time(NULL) ^ getpid());
 
@@ -400,6 +408,9 @@ int main(int argc, char **argv)
                 break;
             case 'a':
                 address = optarg;
+                break;
+            case 'd':
+                fromaddress = optarg;
                 break;
             case 't':
                 waittime = atoi(optarg);
@@ -506,14 +517,14 @@ int main(int argc, char **argv)
             exit(EX_USAGE);
         }
         if (chdir(dirs[0])) {
-            syslog(LOG_ERR, "%s: %m", dirs[0]);
+            syslog(LOG_ERR, "%s: - %s", dirs[0], strerror(errno));
             exit(EX_NOINPUT);
         }
     }
 
     pw = getpwnam(user);
     if (!pw) {
-        syslog(LOG_ERR, "no user %s: %m", user);
+        syslog(LOG_ERR, "no user %s: - %s", user, strerror(errno));
         exit(EX_NOUSER);
     }
 
@@ -532,17 +543,20 @@ int main(int argc, char **argv)
         FILE *pf;
         fd4 = socket(AF_SPP, SOCK_DGRAM, 0);
         if (fd4 < 0) {
-            syslog(LOG_ERR, "cannot open SPP socket: %m");
+            syslog(LOG_ERR, "cannot open SPP socket: - %s", strerror(errno));
             exit(EX_OSERR);
         }
         memset(&bindaddr4, 0, sizeof bindaddr4);
         bindaddr4.sspp_family = AF_SPP;
         bindaddr4.sspp_addr.spp_apid = ascii2spp(address);
 
+        clientaddr.sspp_family = AF_SPP;
+        clientaddr.sspp_addr.spp_apid = ascii2spp(fromaddress);
+
         if (fd4 >= 0) {
             if (bind(fd4, (struct sockaddr *)&bindaddr4,
                         sizeof(bindaddr4)) < 0) {
-                syslog(LOG_ERR, "cannot bind to local IPv4 socket: %m");
+                syslog(LOG_ERR, "cannot bind to local SPP socket addr #%d - %s", bindaddr4.sspp_addr.spp_apid, strerror(errno));
                 exit(EX_OSERR);
             }
         }
@@ -550,7 +564,7 @@ int main(int argc, char **argv)
         /* Note: when running in secure mode (-s), we must not chdir, since
            we are already in the proper directory. */
         if (!nodaemon && daemon(secure, 0) < 0) {
-            syslog(LOG_ERR, "cannot daemonize: %m");
+            syslog(LOG_ERR, "cannot daemonize: - %s", strerror(errno));
             exit(EX_OSERR);
         }
         set_signal(SIGTERM, handle_exit, 0);
@@ -558,13 +572,13 @@ int main(int argc, char **argv)
         if (pidfile) {
             pf = fopen (pidfile, "w");
             if (!pf) {
-                syslog(LOG_ERR, "cannot open pid file '%s' for writing: %m", pidfile);
+                syslog(LOG_ERR, "cannot open pid file '%s' for writing: - %s", pidfile, strerror(errno));
                 pidfile = NULL;
             } else {
                 if (fprintf(pf, "%d\n", getpid()) < 0)
-                    syslog(LOG_ERR, "error writing pid file '%s': %m", pidfile);
+                    syslog(LOG_ERR, "error writing pid file '%s': - %s", pidfile, strerror(errno));
                 if (fclose(pf))
-                    syslog(LOG_ERR, "error closing pid file '%s': %m", pidfile);
+                    syslog(LOG_ERR, "error closing pid file '%s': - %s", pidfile, strerror(errno));
             }
         }
         if (fd6 > fd4)
@@ -602,7 +616,7 @@ int main(int argc, char **argv)
 
         if (exit_signal) { /* happens in standalone mode only */
             if (pidfile && unlink(pidfile)) {
-                syslog(LOG_WARNING, "error removing pid file '%s': %m", pidfile);
+                syslog(LOG_WARNING, "error removing pid file '%s': - %s", pidfile, strerror(errno));
                 exit(EX_OSERR);
             } else {
                 exit(0);
@@ -644,7 +658,7 @@ int main(int argc, char **argv)
             continue;           /* Signal caught, reloop */
 
         if (rv == -1) {
-            syslog(LOG_ERR, "select loop: %m");
+            syslog(LOG_ERR, "select loop: - %s", strerror(errno));
             exit(EX_IOERR);
         } else if (rv == 0) {
             exit(0);            /* Timeout, return to inetd */
@@ -659,30 +673,17 @@ int main(int argc, char **argv)
                 continue;
         }
 
-        fromlen = sizeof(from);
-        n = myrecvfrom(fd, buf, sizeof(buf), 0,
-                (struct sockaddr *)&from, &fromlen, &myaddr);
-
+        n = recvfrom(fd, buf, sizeof(buf), 0, NULL, 0);
         if (n < 0) {
             if (E_WOULD_BLOCK(errno) || errno == EINTR) {
                 continue;       /* Again, from the top */
             } else {
-                syslog(LOG_ERR, "recvfrom: %m");
+                syslog(LOG_ERR, "recvfrom: - %s", strerror(errno));
                 exit(EX_IOERR);
             }
         }
-        if (from.sa.sa_family != AF_SPP) {
-            syslog(LOG_ERR, "received address was not AF_SPP,"
-                    " please check your inetd config");
-            exit(EX_PROTOCOL);
-        }
 
-        if (standalone) {
-                /* myrecvfrom() didn't capture the source address; but we might
-                   have bound to a specific address, if so we should use it */
-                memcpy(SOCKADDR_P(&myaddr), &bindaddr4.sspp_addr,
-                        sizeof(bindaddr4.sspp_addr));
-            }
+
 
         /*
          * Now that we have read the request packet from the UDP
@@ -690,7 +691,7 @@ int main(int argc, char **argv)
          */
         pid = vfork();
         if (pid < 0) {
-            syslog(LOG_ERR, "fork: %m");
+            syslog(LOG_ERR, "fork: - %s", strerror(errno));
             exit(EX_OSERR);     /* Return to inetd, just in case */
         }
         else if (pid == 0){
@@ -709,42 +710,18 @@ int main(int argc, char **argv)
        syslog daemon gets restarted by the time we get here. */
     if (secure && standalone) {
         closelog();
-        openlog(__progname, LOG_PID | LOG_NDELAY, LOG_DAEMON);
+        openlog(__progname, LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
     }
 
-#ifdef HAVE_TCPWRAPPERS
-    /* Verify if this was a legal request for us.  This has to be
-       done before the chroot, while /etc is still accessible. */
-    request_init(&wrap_request,
-            RQ_DAEMON, __progname,
-            RQ_FILE, fd,
-            RQ_CLIENT_SIN, &from, RQ_SERVER_SIN, &myaddr, 0);
-    sock_methods(&wrap_request);
-
-    tmp_p = (char *)inet_ntop(myaddr.sa.sa_family, SOCKADDR_P(&myaddr),
-            tmpbuf, INET6_ADDRSTRLEN);
-    if (!tmp_p) {
-        tmp_p = tmpbuf;
-        strcpy(tmpbuf, "???");
-    }
-    if (hosts_access(&wrap_request) == 0) {
-        if (deny_severity != -1)
-            syslog(deny_severity, "connection refused from %s", tmp_p);
-        exit(EX_NOPERM);        /* Access denied */
-    } else if (allow_severity != -1) {
-        syslog(allow_severity, "connect from %s", tmp_p);
-    }
-#endif
 
     /* Close file descriptors we don't need */
     close(fd);
 
     /* Get a socket.  This has to be done before the chroot(), since
        some systems require access to /dev to create a socket. */
-
-    peer = socket(myaddr.sa.sa_family, SOCK_DGRAM, 0);
+    peer = socket( bindaddr4.sspp_family, SOCK_DGRAM, 0);
     if (peer < 0) {
-        syslog(LOG_ERR, "socket: %m");
+        syslog(LOG_ERR, "socket: - %s", strerror(errno));
         exit(EX_IOERR);
     }
 
@@ -767,7 +744,7 @@ int main(int argc, char **argv)
     /* Chroot and drop privileges */
     if (secure) {
         if (chroot(".")) {
-            syslog(LOG_ERR, "chroot: %m");
+            syslog(LOG_ERR, "chroot: - %s", strerror(errno));
             exit(EX_OSERR);
         }
     }
@@ -786,19 +763,19 @@ int main(int argc, char **argv)
 #endif
 
     if (setrv) {
-        syslog(LOG_ERR, "cannot drop privileges: %m");
+        syslog(LOG_ERR, "cannot drop privileges: - %s", strerror(errno));
         exit(EX_OSERR);
     }
 
     /* Process the request... */
-    if (bind(peer, (struct sockaddr * ) &myaddr.sa, sizeof(myaddr.sa)) < 0) {
-        syslog(LOG_ERR, "bind: %m");
+    if (bind(peer, (struct sockaddr * ) &bindaddr4, sizeof(bindaddr4)) < 0) {
+        syslog(LOG_ERR, "bind: - %s", strerror(errno));
         exit(EX_IOERR);
     }
 
     /* This isn't necessary in the TFTP version since we don't have source discovery
      * if (connect(peer, &from.sa, SOCKLEN(&from)) < 0) {
-        syslog(LOG_ERR, "connect: %m");
+        syslog(LOG_ERR, "connect: - %s", strerror(errno));
         exit(EX_IOERR);
     }*/
 
@@ -889,8 +866,7 @@ int tftp(struct tftphdr *tp, int size)
                 exit(0);
             }
             if (verbosity >= 1) {
-                tmp_p = (char *)inet_ntop(from.sa.sa_family, SOCKADDR_P(&from),
-                        tmpbuf, INET6_ADDRSTRLEN);
+                spp2ascii(tmp_p, &clientaddr.sspp_addr);
                 if (!tmp_p) {
                     tmp_p = tmpbuf;
                     strcpy(tmpbuf, "???");
@@ -1129,8 +1105,8 @@ static int rewrite_macros(char macro, char *output)
 
     switch (macro) {
         case 'i':
-            p = (char *)inet_ntop(from.sa.sa_family, SOCKADDR_P(&from),
-                    tb, INET6_ADDRSTRLEN);
+            spp2ascii(p, &clientaddr.sspp_addr);
+
             if (output && p)
                 strcpy(output, p);
             if (!p)
@@ -1318,7 +1294,8 @@ static void tftp_sendfile(const struct formats *pf, struct tftphdr *oap, int oac
         (void)sigsetjmp(timeoutbuf, 1);
 oack:
         r_timeout = timeout;
-        if (send(peer, oap, oacklen, 0) != oacklen) {
+        if (sendto(peer, oap, oacklen, 0,
+                    (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp)) != oacklen) {
             syslog(LOG_WARNING, "tftpd: oack: %m\n");
             goto abort;
         }
@@ -1360,15 +1337,16 @@ oack:
         (void)sigsetjmp(timeoutbuf, 1);
 
         r_timeout = timeout;
-        if (send(peer, dp, size + 4, 0) != size + 4) {
-            syslog(LOG_WARNING, "tftpd: write: %m");
+        if (sendto(peer, dp, size + 4, 0,
+                  (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp)) != size + 4) {
+            syslog(LOG_WARNING, "tftpd: write: - %s", strerror(errno));
             goto abort;
         }
         read_ahead(file, pf->f_convert);
         for (;;) {
             n = recv_time(peer, ackbuf, sizeof(ackbuf), 0, &r_timeout);
             if (n < 0) {
-                syslog(LOG_WARNING, "tftpd: read(ack): %m");
+                syslog(LOG_WARNING, "tftpd: read(ack): - %s", strerror(errno));
                 goto abort;
             }
             ap = (struct tftphdr *)ackbuf;
@@ -1435,15 +1413,16 @@ static void tftp_recvfile(const struct formats *pf, struct tftphdr *oap, int oac
         (void)sigsetjmp(timeoutbuf, 1);
 send_ack:
         r_timeout = timeout;
-        if (send(peer, ackbuf, acksize, 0) != acksize) {
-            syslog(LOG_WARNING, "tftpd: write(ack): %m");
+        if (sendto(peer, ackbuf, acksize, 0,
+            (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp)) != acksize) {
+            syslog(LOG_WARNING, "tftpd: write(ack): - %s", strerror(errno));
             goto abort;
         }
         write_behind(file, pf->f_convert);
         for (;;) {
             n = recv_time(peer, dp, PKTSIZE, 0, &r_timeout);
             if (n < 0) {        /* really? */
-                syslog(LOG_WARNING, "tftpd: read: %m");
+                syslog(LOG_WARNING, "tftpd: read: - %s", strerror(errno));
                 goto abort;
             }
             dp_opcode = ntohs((u_short) dp->th_opcode);
@@ -1475,7 +1454,8 @@ send_ack:
 
     ap->th_opcode = htons((u_short) ACK);       /* send the "final" ack */
     ap->th_block = htons((u_short) (block));
-    (void)send(peer, ackbuf, 4, 0);
+    (void)sendto(peer, ackbuf, 4, 0,
+          (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp));
 
     timeout_quit = 1;           /* just quit on timeout */
     n = recv_time(peer, buf, sizeof(buf), 0, &timeout); /* normally times out and quits */
@@ -1484,7 +1464,8 @@ send_ack:
     if (n >= 4 &&               /* if read some data */
             dp_opcode == DATA &&    /* and got a data block */
             block == dp_block) {    /* then my last ack was lost */
-        (void)send(peer, ackbuf, 4, 0); /* resend final ack */
+        (void)sendto(peer, ackbuf, 4, 0,
+              (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp)); /* resend final ack */
     }
 abort:
     return;
@@ -1538,8 +1519,8 @@ static void nak(int error, const char *msg)
     length += 4;                /* Add space for header */
 
     if (verbosity >= 2) {
-        tmp_p = (char *)inet_ntop(from.sa.sa_family, SOCKADDR_P(&from),
-                tmpbuf, INET6_ADDRSTRLEN);
+        spp2ascii(&tmp_p, &clientaddr.sspp_addr);
+
         if (!tmp_p) {
             tmp_p = tmpbuf;
             strcpy(tmpbuf, "???");
@@ -1548,6 +1529,7 @@ static void nak(int error, const char *msg)
                 error, tp->th_msg, tmp_p);
     }
 
-    if (send(peer, buf, length, 0) != length)
-        syslog(LOG_WARNING, "nak: %m");
+    if (sendto(peer, buf, length, 0,
+          (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp)) != length)
+        syslog(LOG_WARNING, "nak: - %s", strerror(errno));
 }
