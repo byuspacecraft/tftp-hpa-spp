@@ -865,7 +865,7 @@ int tftp(struct tftphdr *tp, int size)
                 nak(EACCESS, errmsgptr);        /* File denied by mapping rule */
                 exit(0);
             }
-            if (verbosity >= 1) {
+            if (verbosity >= 1) { //TODO:  when verbosity is on, the SOM reboots on a get request
                 spp2ascii(tmp_p, &clientaddr.sspp_addr);
                 if (!tmp_p) {
                     tmp_p = tmpbuf;
@@ -1519,7 +1519,7 @@ static void nak(int error, const char *msg)
     length += 4;                /* Add space for header */
 
     if (verbosity >= 2) {
-        spp2ascii(&tmp_p, &clientaddr.sspp_addr);
+        spp2ascii(tmp_p, &clientaddr.sspp_addr);
 
         if (!tmp_p) {
             tmp_p = tmpbuf;
