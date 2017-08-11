@@ -86,7 +86,7 @@ static char buf[PKTSIZE];
 static char ackbuf[PKTSIZE];
 static unsigned int max_blksize = MAX_SEGSIZE;
 
-static char tmpbuf[INET6_ADDRSTRLEN], *tmp_p;
+static char tmpbuf[INET6_ADDRSTRLEN];
 
 static struct sockaddr_spp clientaddr;
 static socklen_t clientaddrlen;
@@ -150,7 +150,7 @@ static void handle_exit(int sig)
 }
 
 /* Simple function that takes a character buffer and spits out an integer */
-unsigned int ascii2spp(const char *sppbuf)
+static unsigned int ascii2spp(const char *sppbuf)
 {
     unsigned int apid;
     sscanf(sppbuf,"%d",&apid);
@@ -158,10 +158,12 @@ unsigned int ascii2spp(const char *sppbuf)
 }
 
 /* get a character buffer from an spp address */
-void spp2ascii(char *buf, const spp_address *addr)
-{
-    snprintf(buf,sizeof(buf),"%d",addr->spp_apid);
-}
+// void spp2ascii(char *abuf, const spp_address *addr)
+// {
+//     printf("sizeof abuf = %d\n", sizeof(abuf));
+//     snprintf(abuf,sizeof(abuf),"%d",addr->spp_apid);
+//     printf("abuf = %s\n", abuf);
+// }
 
 /* Handle timeout signal or timeout event */
 void timer(int sig)
@@ -866,21 +868,21 @@ int tftp(struct tftphdr *tp, int size)
                 exit(0);
             }
             if (verbosity >= 1) { //TODO:  when verbosity is on, the SOM reboots on a get request
-                spp2ascii(tmp_p, &clientaddr.sspp_addr);
-                if (!tmp_p) {
-                    tmp_p = tmpbuf;
+                bzero(tmpbuf, INET6_ADDRSTRLEN);
+                snprintf(tmpbuf,sizeof(tmpbuf),"%d",clientaddr.sspp_addr.spp_apid);
+                if (tmpbuf[0] == 0) {
                     strcpy(tmpbuf, "???");
                 }
                 if (filename == origfilename
                         || !strcmp(filename, origfilename))
                     syslog(LOG_NOTICE, "%s from %s filename %s\n",
                             tp_opcode == WRQ ? "WRQ" : "RRQ",
-                            tmp_p, filename);
+                            tmpbuf, filename);
                 else
                     syslog(LOG_NOTICE,
                             "%s from %s filename %s remapped to %s\n",
                             tp_opcode == WRQ ? "WRQ" : "RRQ",
-                            tmp_p, origfilename,
+                            tmpbuf, origfilename,
                             filename);
             }
             ecode =
@@ -1105,8 +1107,7 @@ static int rewrite_macros(char macro, char *output)
 
     switch (macro) {
         case 'i':
-            spp2ascii(p, &clientaddr.sspp_addr);
-
+            snprintf(tb,sizeof(tb),"%d",clientaddr.sspp_addr.spp_apid);
             if (output && p)
                 strcpy(output, p);
             if (!p)
@@ -1519,14 +1520,13 @@ static void nak(int error, const char *msg)
     length += 4;                /* Add space for header */
 
     if (verbosity >= 2) {
-        spp2ascii(tmp_p, &clientaddr.sspp_addr);
-
-        if (!tmp_p) {
-            tmp_p = tmpbuf;
+        bzero(tmpbuf, INET6_ADDRSTRLEN);
+        snprintf(tmpbuf,sizeof(tmpbuf),"%d",clientaddr.sspp_addr.spp_apid);
+        if (tmpbuf[0] == 0) {
             strcpy(tmpbuf, "???");
         }
         syslog(LOG_INFO, "sending NAK (%d, %s) to %s",
-                error, tp->th_msg, tmp_p);
+                error, tp->th_msg, tmpbuf);
     }
 
     if (sendto(peer, buf, length, 0,
