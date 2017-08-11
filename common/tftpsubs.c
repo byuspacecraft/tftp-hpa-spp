@@ -299,9 +299,11 @@ int pick_port_bind(int sockfd, union sock_addr *myaddr,
     return -1;
 }
 
-int
-set_sock_addr(char *host,union sock_addr  *s, char **name)
+/*
+int set_sock_addr(char *host, union sock_addr  *s, char **name)
 {
+    printf("tftpsubs.c: set_sock_addr: Warning not supported for spp\n");
+
     struct addrinfo *addrResult;
     struct addrinfo hints;
     int err;
@@ -324,8 +326,9 @@ set_sock_addr(char *host,union sock_addr  *s, char **name)
             *name = xstrdup(host);
     }
     freeaddrinfo(addrResult);
-    return 0;
-}
+
+    return -1;
+} */
 
 #ifdef HAVE_IPV6
 int is_numeric_ipv6(const char *p)

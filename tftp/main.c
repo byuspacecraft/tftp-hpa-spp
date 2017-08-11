@@ -195,7 +195,7 @@ static inline void usage(int errcode)
     exit(errcode);
 }
 
-unsigned int ascii2spp(const char *sppbuf)
+static unsigned int ascii2spp(const char *sppbuf)
 {
     unsigned int apid;
     sscanf(sppbuf,"%d",&apid);
@@ -309,8 +309,10 @@ int main(int argc, char *argv[])
     }
     bzero(&sa, sizeof(sa));
     sa.sa.sa_family = ai_fam_sock;
+    if (verbose) {
+      printf("Setting local address to %s\n", peerargv[2]);
+    }
 
-    printf("Setting local address to %s\n", peerargv[2]);
     ((struct sockaddr_spp *) &sa.sa)->sspp_addr.spp_apid = ascii2spp(peerargv[2]);
     if (bind(f, (struct sockaddr *) &sa, sizeof(sa))) {
         perror("tftp: bind");
@@ -346,7 +348,7 @@ int main(int argc, char *argv[])
     return 0;                   /* Never reached */
 }
 
-char *hostname;
+char hostname[INET6_ADDRSTRLEN];
 
 /* Called when a command is incomplete; modifies
    the global variable "line" */
@@ -388,7 +390,6 @@ static void getmoreargs(const char *partial, const char *mprompt)
 
 void setpeer(int argc, char *argv[])
 {
-    int err;
     if (argc < 2) {
         getmoreargs("connect ", "(to) ");
         makeargv();
@@ -403,7 +404,12 @@ void setpeer(int argc, char *argv[])
     peeraddr.sa.sa_family = ai_fam;
 /*    err = set_sock_addr(argv[1], &peeraddr, &hostname);*/
     /* Need to do an SPP thing here. */
-    printf("Setting peer to %s\n", argv[1]);
+    strcpy(hostname, argv[1]);
+
+    if (verbose) {
+      printf("Setting peer to %s\n", argv[1]);
+    }
+
     ((struct sockaddr_spp *) &peeraddr.sa)->sspp_addr.spp_apid = ascii2spp(argv[1]);
     ai_fam = peeraddr.sa.sa_family;
     if (f == -1) { /* socket not open */
@@ -429,13 +435,6 @@ void setpeer(int argc, char *argv[])
         }
     }
 
-    if (verbose) {
-        char tmp[INET6_ADDRSTRLEN], *tp;
-        if (!tp)
-            tp = (char *)"???";
-        printf("Connected to %s (%s)\n",
-               hostname, tp);
-    }
     connected = 1;
 }
 
@@ -513,6 +512,7 @@ void put(int argc, char *argv[])
     }
     targ = argv[argc - 1];
     if (!literal && strchr(argv[argc - 1], ':')) {
+
         for (n = 1; n < argc - 1; n++)
             if (strchr(argv[n], ':')) {
                 putusage(argv[0]);
@@ -521,8 +521,10 @@ void put(int argc, char *argv[])
         cp = argv[argc - 1];
         targ = strchr(cp, ':');
         *targ++ = 0;
-        peeraddr.sa.sa_family = ai_fam;
-        err = set_sock_addr(cp, &peeraddr,&hostname);
+        printf("main.c: put: set_sock_addr not supported for SPP\n");
+        /*peeraddr.sa.sa_family = ai_fam;
+        err = set_sock_addr(cp, &peeraddr, &hostname);
+        */
         if (err) {
             printf("Error: %s\n", gai_strerror(err));
             printf("%s: unknown host\n", argv[1]);
@@ -612,8 +614,11 @@ void get(int argc, char *argv[])
             int err;
 
             *src++ = 0;
+            printf("main.c: get: warning, set_sock_addr not supported for spp");
+            /*
             peeraddr.sa.sa_family = ai_fam;
             err = set_sock_addr(argv[n], &peeraddr, &hostname);
+            */
             if (err) {
                 printf("Warning: %s\n", gai_strerror(err));
                 printf("%s: unknown host\n", argv[1]);
