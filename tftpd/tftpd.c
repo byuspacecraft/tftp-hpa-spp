@@ -377,12 +377,13 @@ int main(int argc, char **argv)
     const char *pidfile = NULL;
     u_short tp_opcode;
 
+    openlog(__progname, LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
+    syslog(LOG_USER|LOG_DEBUG, "Process started.");
     /* basename() is way too much of a pain from a portability standpoint */
 
     p = strrchr(argv[0], '/');
     __progname = (p && p[1]) ? p + 1 : argv[0];
 
-    openlog(__progname, LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
 
     srand(time(NULL) ^ getpid());
 
@@ -502,6 +503,8 @@ int main(int argc, char **argv)
                 syslog(LOG_ERR, "Unknown option: '%c'", optopt);
                 break;
         }
+        syslog(LOG_USER|LOG_DEBUG, "Parsed arguments");
+
 
     dirs = xmalloc((argc - optind + 1) * sizeof(char *));
     for (ndirs = 0; optind != argc; optind++)
@@ -548,6 +551,7 @@ int main(int argc, char **argv)
             syslog(LOG_ERR, "cannot open SPP socket: - %s", strerror(errno));
             exit(EX_OSERR);
         }
+        syslog(LOG_USER|LOG_DEBUG, "Creating sockets");
         memset(&bindaddr4, 0, sizeof bindaddr4);
         bindaddr4.sspp_family = AF_SPP;
         bindaddr4.sspp_addr.spp_apid = ascii2spp(address);
