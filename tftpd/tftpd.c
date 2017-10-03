@@ -173,9 +173,10 @@ void timer(int sig)
 {
     (void)sig;                  /* Suppress unused warning */
     timeout <<= 1;
-    if (timeout >= maxtimeout || timeout_quit)
+    if (timeout >= maxtimeout || timeout_quit){
     printf("Exiting %s: line %d\n\r", __func__, __LINE__);
         _exit(0);
+    }
     siglongjmp(timeoutbuf, 1);
 }
 
@@ -1261,10 +1262,10 @@ static int validate_access(char *filename, int mode,
         _exit(EX_OSERR);         /* This shouldn't happen */
 
     /* A duplicate RRQ or (worse!) WRQ packet could really cause havoc... */
-    if (lock_file(fd, mode != RRQ))
+    if (lock_file(fd, mode != RRQ)){
     printf("Exiting %s: line %d\n\r", __func__, __LINE__);
         _exit(0);
-
+    }
     if (mode == RRQ) {
         if (!unixperms && (stbuf.st_mode & (S_IREAD >> 6)) == 0) {
             *errmsg = "File must have global read permissions";
