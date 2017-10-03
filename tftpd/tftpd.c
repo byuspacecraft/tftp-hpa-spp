@@ -174,7 +174,8 @@ void timer(int sig)
     (void)sig;                  /* Suppress unused warning */
     timeout <<= 1;
     if (timeout >= maxtimeout || timeout_quit)
-        exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+        _exit(0);
     siglongjmp(timeoutbuf, 1);
 }
 
@@ -187,7 +188,7 @@ static struct rule *read_remap_rules(const char *file)
     f = fopen(file, "rt");
     if (!f) {
         syslog(LOG_ERR, "Cannot open map file: %s: - %s", file, strerror(errno));
-        exit(EX_NOINPUT);
+        _exit(EX_NOINPUT);
     }
     rulep = parserulefile(f);
     fclose(f);
@@ -232,7 +233,7 @@ static void set_socket_nonblock(int fd, int flag)
 #endif
     if (err) {
         syslog(LOG_ERR, "Cannot set nonblock flag on socket: - %s", strerror(errno));
-        exit(EX_OSERR);
+        _exit(EX_OSERR);
     }
 }
 
@@ -374,7 +375,6 @@ int main(int argc, char **argv)
 
 
     /* basename() is way too much of a pain from a portability standpoint */
-    printf("%s: %d\n", __FILE__, __LINE__);
     p = strrchr(argv[0], '/');
     __progname = (p && p[1]) ? p + 1 : argv[0];
 
@@ -504,13 +504,11 @@ int main(int argc, char **argv)
         }
         syslog(LOG_USER|LOG_DEBUG, "Parsed arguments");
 
-    printf("%s: %d\n", __FILE__, __LINE__);
     dirs = xmalloc((argc - optind + 1) * sizeof(char *));
     for (ndirs = 0; optind != argc; optind++)
         dirs[ndirs++] = argv[optind];
 
     dirs[ndirs] = NULL;
-    printf("%s: %d\n", __FILE__, __LINE__);
 
     if (secure) {
         if (ndirs == 0) {
@@ -546,8 +544,8 @@ int main(int argc, char **argv)
     /* If we're running standalone, set up the input port */
     if (standalone) {
         FILE *pf;
-        printf("%s: %d\n", __FILE__, __LINE__);
         fd4 = socket(AF_SPP, SOCK_DGRAM, 0);
+        printf("%s %s: Line %d PID %d. Opened socket to family %d, fd4 = %d\n",__FILE__, __func__, __LINE__, getpid(), AF_SPP, fd4);
         if (fd4 < 0) {
             syslog(LOG_ERR, "cannot open SPP socket: - %s", strerror(errno));
             exit(EX_OSERR);
@@ -567,20 +565,17 @@ int main(int argc, char **argv)
                 exit(EX_OSERR);
             }
         }
-        printf("%s: %d\n", __FILE__, __LINE__);
+    printf("%s %s: Line %d PID %d. Bound socket %d to address %d\n",__FILE__, __func__, __LINE__, getpid(), fd4, bindaddr4.sspp_addr.spp_apid);
         /* Daemonize this process */
         /* Note: when running in secure mode (-s), we must not chdir, since
            we are already in the proper directory. */
         if (!nodaemon && daemon(secure, 0) < 0) {
-          printf("%s: %d\n", __FILE__, __LINE__);
             syslog(LOG_ERR, "cannot daemonize: - %s", strerror(errno));
             exit(EX_OSERR);
         }
-        printf("%s: %d\n", __FILE__, __LINE__);
         set_signal(SIGTERM, handle_exit, 0);
         set_signal(SIGINT,  handle_exit, 0);
         if (pidfile) {
-          printf("%s: %d\n", __FILE__, __LINE__);
             pf = fopen (pidfile, "w");
             if (!pf) {
                 syslog(LOG_ERR, "cannot open pid file '%s' for writing: - %s", pidfile, strerror(errno));
@@ -592,7 +587,6 @@ int main(int argc, char **argv)
                     syslog(LOG_ERR, "error closing pid file '%s': - %s", pidfile, strerror(errno));
             }
         }
-        printf("%s: %d\n", __FILE__, __LINE__);
         if (fd6 > fd4)
             fdmax = fd6;
         else
@@ -617,12 +611,11 @@ int main(int argc, char **argv)
        is polled synchronously to make sure we don't
        lose packets as a result. */
     set_signal(SIGHUP, handle_sighup, 0);
-printf("%s: %d\n", __FILE__, __LINE__);
     if (spec_umask || !unixperms)
         umask(my_umask);
 
     while (1) {
-      printf("%s: %d\n", __FILE__, __LINE__);
+      printf(">>> Entering main loop >>> Line = %d PID = %d fd = %d\n", __LINE__, getpid(), fd);
         fd_set readset;
         struct timeval tv_waittime;
         int rv;
@@ -632,10 +625,10 @@ printf("%s: %d\n", __FILE__, __LINE__);
                 syslog(LOG_WARNING, "error removing pid file '%s': - %s", pidfile, strerror(errno));
                 exit(EX_OSERR);
             } else {
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
                 exit(0);
             }
         }
-printf("%s: %d\n", __FILE__, __LINE__);
         if (caught_sighup) {
             caught_sighup = 0;
             if (standalone) {
@@ -647,10 +640,10 @@ printf("%s: %d\n", __FILE__, __LINE__);
 #endif
             } else {
                 /* Return to inetd for respawn */
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
                 exit(0);
             }
         }
-printf("%s: %d\n", __FILE__, __LINE__);
         FD_ZERO(&readset);
         if (standalone) {
             if (fd4 >= 0) {
@@ -663,7 +656,10 @@ printf("%s: %d\n", __FILE__, __LINE__);
         tv_waittime.tv_sec = waittime;
         tv_waittime.tv_usec = 0;
 
-printf("%s: %d\n", __FILE__, __LINE__);
+printf("%s: Line = %d PID = %d fd = %d\n", __FILE__, __LINE__, getpid(), fd);
+printf("fd4 = %d, fdmax = %d, standalone = %d, waittime = %d,\n\r", fd4, fdmax, standalone, waittime);
+printf("user = %s, rewrite_file = %s = %s\n\r", user, rewrite_file, pidfile);
+
         /* Never time out if we're in standalone mode */
         rv = select(fdmax + 1, &readset, NULL, NULL,
                 standalone ? NULL : &tv_waittime);
@@ -674,9 +670,10 @@ printf("%s: %d\n", __FILE__, __LINE__);
             syslog(LOG_ERR, "select loop: - %s", strerror(errno));
             exit(EX_IOERR);
         } else if (rv == 0) {
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
             exit(0);            /* Timeout, return to inetd */
         }
-printf("%s: %d\n", __FILE__, __LINE__);
+
         if (standalone) {
             if ((fd4 >= 0) && FD_ISSET(fd4, &readset))
                 fd = fd4;
@@ -685,9 +682,9 @@ printf("%s: %d\n", __FILE__, __LINE__);
             else /* not in set ??? */
                 continue;
         }
-printf("%s: %d\n", __FILE__, __LINE__);
         n = recvfrom(fd, buf, sizeof(buf), 0, NULL, 0);
         if (n < 0) {
+            printf("recvfrom error\n");
             if (E_WOULD_BLOCK(errno) || errno == EINTR) {
                 continue;       /* Again, from the top */
             } else {
@@ -695,27 +692,29 @@ printf("%s: %d\n", __FILE__, __LINE__);
                 exit(EX_IOERR);
             }
         }
-printf("%s: %d\n", __FILE__, __LINE__);
 
 
         /*
          * Now that we have read the request packet from the UDP
          * socket, we fork and go back to listening to the socket.
          */
-        pid = vfork();
-        if (pid < 0) {
-            syslog(LOG_ERR, "fork: - %s", strerror(errno));
-            exit(EX_OSERR);     /* Return to inetd, just in case */
-        }
-        else if (pid == 0){ /* child process */
+     /*
+      *[> <] pid = vfork();
+      *[> <] if (pid < 0) {
+      *[> <]     syslog(LOG_ERR, "fork: - %s", strerror(errno));
+      *[> <]     exit(EX_OSERR);     [> Return to inetd, just in case <]
+      *[> <] }
+      *[> <] else if (pid == 0){ [> child process <]
+      */
             printf("Got request, breaking...\n");
             break;
-        }
-printf("%s: %d\n", __FILE__, __LINE__);
-        /* Child exit, parent loop */
+        /*
+         *}
+         *[> Child exit, parent loop <]
+         */
     }
     /* Child process: handle the actual request here */
-printf("%s: %d\n", __FILE__, __LINE__);
+printf(">>> Starting child process >>> Line = %d PID = %d fd = %d\n", __LINE__, getpid(), fd);
     /* Ignore SIGHUP */
     set_signal(SIGHUP, SIG_IGN, 0);
 
@@ -728,39 +727,39 @@ printf("%s: %d\n", __FILE__, __LINE__);
         openlog(__progname, LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
     }
 
-printf("%s: %d\n", __FILE__, __LINE__);
     /* Close file descriptors we don't need */
-    close(fd);
-
+//    close(fd);
     /* Get a socket.  This has to be done before the chroot(), since
        some systems require access to /dev to create a socket. */
-    peer = socket( bindaddr4.sspp_family, SOCK_DGRAM, 0);
+    peer = fd4; // socket( bindaddr4.sspp_family, SOCK_DGRAM, 0);
+   // printf("%s %s: Line %d PID %d. Opened socket to family %d, peer = %d\n",__FILE__, __func__, __LINE__, getpid(), bindaddr4.sspp_family, peer);
     if (peer < 0) {
         syslog(LOG_ERR, "socket: - %s", strerror(errno));
-        exit(EX_IOERR);
+        _exit(EX_IOERR);
     }
-printf("%s: %d\n", __FILE__, __LINE__);
   /* Set up the supplementary group access list if possible */
     /* /etc/group still need to be accessible at this point */
 #ifdef HAVE_INITGROUPS
     setrv = initgroups(user, pw->pw_gid);
     if (setrv) {
         syslog(LOG_ERR, "cannot set groups for user %s", user);
-        exit(EX_OSERR);
+        _exit(EX_OSERR);
     }
+printf("%s: Line = %d PID = %d fd = %d\n", __FILE__, __LINE__, getpid(), fd);
 #else
 #ifdef HAVE_SETGROUPS
     if (setgroups(0, NULL)) {
         syslog(LOG_ERR, "cannot clear group list");
     }
+printf("%s: Line = %d PID = %d fd = %d\n", __FILE__, __LINE__, getpid(), fd);
 #endif
 #endif
-printf("%s: %d\n", __FILE__, __LINE__);
     /* Chroot and drop privileges */
     if (secure) {
+printf("%s: Line = %d PID = %d fd = %d\n", __FILE__, __LINE__, getpid(), fd);
         if (chroot(".")) {
             syslog(LOG_ERR, "chroot: - %s", strerror(errno));
-            exit(EX_OSERR);
+            _exit(EX_OSERR);
         }
     }
 #ifdef HAVE_SETREGID
@@ -776,34 +775,34 @@ printf("%s: %d\n", __FILE__, __LINE__);
     setrv = setrv || setuid(pw->pw_uid) ||
         (geteuid() != pw->pw_uid && seteuid(pw->pw_uid));
 #endif
-printf("%s: %d\n", __FILE__, __LINE__);
     if (setrv) {
         syslog(LOG_ERR, "cannot drop privileges: - %s", strerror(errno));
-        exit(EX_OSERR);
+        _exit(EX_OSERR);
     }
-printf("%s: %d\n", __FILE__, __LINE__);
     /* Process the request... */
-    if (bind(peer, (struct sockaddr * ) &bindaddr4, sizeof(bindaddr4)) < 0) {
-        syslog(LOG_ERR, "bind: - %s", strerror(errno));
-        exit(EX_IOERR);
-    }
+    /*
+     *if (bind(peer, (struct sockaddr * ) &bindaddr4, sizeof(bindaddr4)) < 0) {
+     *    syslog(LOG_ERR, "bind: - %s", strerror(errno));
+     *    _exit(EX_IOERR);
+     *}
+     *printf("%s %s: Line %d PID %d. Bound socket %d to address %d\n",__FILE__, __func__, __LINE__, getpid(), peer, bindaddr4.sspp_addr.spp_apid);
+     */
 
     /* This isn't necessary in the TFTP version since we don't have source discovery
      * if (connect(peer, &from.sa, SOCKLEN(&from)) < 0) {
         syslog(LOG_ERR, "connect: - %s", strerror(errno));
-        exit(EX_IOERR);
+        _exit(EX_IOERR);
     }*/
 
     /* Disable path MTU discovery */
 //    pmtu_discovery_off(peer);
 //    Not a thing in SPP
-printf("%s: %d\n", __FILE__, __LINE__);
     tp = (struct tftphdr *)buf;
     tp_opcode = ntohs(tp->th_opcode);
     if (tp_opcode == RRQ || tp_opcode == WRQ)
         tftp(tp, n);
-  printf("%s: %d\n", __FILE__, __LINE__);
-    exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+    _exit(0);
 }
 
 static char *rewrite_access(char *, int, const char **);
@@ -843,14 +842,14 @@ int tftp(struct tftphdr *tp, int size)
 
     char *val = NULL, *opt = NULL;
     char *ap = ackbuf + 2;
-printf("%s: %d\n", __FILE__, __LINE__);
+printf("%s: Line = %d PID = %d\n", __FILE__, __LINE__, getpid());
     ((struct tftphdr *)ackbuf)->th_opcode = htons(OACK);
 
     origfilename = cp = (char *)&(tp->th_stuff);
     argn = 0;
 
     end = (char *)tp + size;
-printf("%s: %d\n", __FILE__, __LINE__);
+printf("%s: Line = %d PID = %d\n", __FILE__, __LINE__, getpid());
     while (cp < end && *cp) {
         do {
             cp++;
@@ -858,7 +857,9 @@ printf("%s: %d\n", __FILE__, __LINE__);
 
         if (*cp) {
             nak(EBADOP, "Request not null-terminated");
-            exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+
+            _exit(0);
         }
 
         argn++;
@@ -873,13 +874,15 @@ printf("%s: %d\n", __FILE__, __LINE__);
             }
             if (!pf->f_mode) {
                 nak(EBADOP, "Unknown mode");
-                exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+                _exit(0);
             }
             if (!(filename =
                         (*pf->f_rewrite) (origfilename, tp_opcode,
                             &errmsgptr))) {
                 nak(EACCESS, errmsgptr);        /* File denied by mapping rule */
-                exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+                _exit(0);
             }
             if (verbosity >= 1) { //TODO:  when verbosity is on, the SOM reboots on a get request
                 bzero(tmpbuf, INET6_ADDRSTRLEN);
@@ -903,7 +906,8 @@ printf("%s: %d\n", __FILE__, __LINE__);
                 (*pf->f_validate) (filename, tp_opcode, pf, &errmsgptr);
             if (ecode) {
                 nak(ecode, errmsgptr);
-                exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+                _exit(0);
             }
             opt = ++cp;
         } else if (argn & 1) {
@@ -916,9 +920,11 @@ printf("%s: %d\n", __FILE__, __LINE__);
 
     if (!pf) {
         nak(EBADOP, "Missing mode");
-        exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+        _exit(0);
     }
 
+printf("%s: Line = %d PID = %d\n", __FILE__, __LINE__, getpid());
     if (ap != (ackbuf + 2)) {
         if (tp_opcode == WRQ)
             (*pf->f_recv) (pf, (struct tftphdr *)ackbuf, ap - ackbuf);
@@ -930,7 +936,8 @@ printf("%s: %d\n", __FILE__, __LINE__);
         else
             (*pf->f_send) (pf, NULL, 0);
     }
-    exit(0);                    /* Request completed */
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+    _exit(0);                    /* Request completed */
 }
 
 static int blksize_set;
@@ -1061,6 +1068,7 @@ static int set_utimeout(uintmax_t *vp)
  * integers which matches all our current options.
  */
 static void do_opt(const char *opt, const char *val, char **ap)
+    
 {
     struct options *po;
     char retbuf[OPTBUFSIZE];
@@ -1088,7 +1096,8 @@ static void do_opt(const char *opt, const char *val, char **ap)
 
                 if (p + optlen + retlen + 2 >= ackbuf + sizeof(ackbuf)) {
                     nak(EOPTNEG, "Insufficient space for options");
-                    exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+                    _exit(0);
                 }
 
                 memcpy(p, opt, optlen+1);
@@ -1097,7 +1106,8 @@ static void do_opt(const char *opt, const char *val, char **ap)
                 p += retlen+1;
             } else {
                 nak(EOPTNEG, "Unsupported option(s) requested");
-                exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+                _exit(0);
             }
             break;
         }
@@ -1248,11 +1258,12 @@ static int validate_access(char *filename, int mode,
     }
 
     if (fstat(fd, &stbuf) < 0)
-        exit(EX_OSERR);         /* This shouldn't happen */
+        _exit(EX_OSERR);         /* This shouldn't happen */
 
     /* A duplicate RRQ or (worse!) WRQ packet could really cause havoc... */
     if (lock_file(fd, mode != RRQ))
-        exit(0);
+    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
+        _exit(0);
 
     if (mode == RRQ) {
         if (!unixperms && (stbuf.st_mode & (S_IREAD >> 6)) == 0) {
@@ -1287,7 +1298,7 @@ static int validate_access(char *filename, int mode,
 
     file = fdopen(fd, stdio_mode);
     if (file == NULL)
-        exit(EX_OSERR);         /* Internal error */
+        _exit(EX_OSERR);         /* Internal error */
 
     return (0);
 }
@@ -1303,12 +1314,13 @@ static void tftp_sendfile(const struct formats *pf, struct tftphdr *oap, int oac
     u_short ap_opcode, ap_block;
     unsigned long r_timeout;
     int size, n;
-
+    printf("Entering tftp_sendfile. Line: %d\n", __LINE__);
     if (oap) {
         timeout = rexmtval;
         (void)sigsetjmp(timeoutbuf, 1);
 oack:
         r_timeout = timeout;
+        printf("%s line: %d  peer = %d\n",__func__, __LINE__, peer);
         if (sendto(peer, oap, oacklen, 0,
                     (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp)) != oacklen) {
             syslog(LOG_WARNING, "tftpd: oack: %m\n");
@@ -1390,6 +1402,8 @@ oack:
     } while (size == segsize);
 abort:
     (void)fclose(file);
+
+    printf("Leaving tftp_sendfile. Line: %d\n", __LINE__);
 }
 
 /*
@@ -1406,6 +1420,7 @@ static void tftp_recvfile(const struct formats *pf, struct tftphdr *oap, int oac
     u_short dp_opcode, dp_block;
     unsigned long r_timeout;
 
+    printf("Entering tftp_recvfile. Line: %d\n", __LINE__);
     dp = w_init();
     do {
         timeout = rexmtval;
@@ -1483,6 +1498,7 @@ send_ack:
               (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp)); /* resend final ack */
     }
 abort:
+    printf("Entering tftp_recvfile. Line: %d\n", __LINE__);
     return;
 }
 
