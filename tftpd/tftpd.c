@@ -192,6 +192,7 @@ static struct rule *read_remap_rules(const char *file)
         _exit(EX_NOINPUT);
     }
     rulep = parserulefile(f);
+    printf("%s: line: %d. Closing %d\n", __func__, __LINE__, file);
     fclose(f);
 
     return rulep;
@@ -584,6 +585,7 @@ int main(int argc, char **argv)
             } else {
                 if (fprintf(pf, "%d\n", getpid()) < 0)
                     syslog(LOG_ERR, "error writing pid file '%s': - %s", pidfile, strerror(errno));
+    printf("%s: line: %d. Closing %d\n", __func__, __LINE__, pf);
                 if (fclose(pf))
                     syslog(LOG_ERR, "error closing pid file '%s': - %s", pidfile, strerror(errno));
             }
@@ -594,6 +596,7 @@ int main(int argc, char **argv)
             fdmax = fd4;
     } else {
         /* 0 is our socket descriptor */
+    printf("%s: line: %d. Closing 1, 2\n", __func__, __LINE__);
         close(1);
         close(2);
         fd = 0;
@@ -707,13 +710,12 @@ printf("user = %s, rewrite_file = %s = %s\n\r", user, rewrite_file, pidfile);
       *[> <] }
       *[> <] else if (pid == 0){ [> child process <]
       */
-            printf("Got request, breaking...\n");
-            break;
+            printf("Got request, continuing...\n");
+         /*   break;*/
         /*
          *}
          *[> Child exit, parent loop <]
          */
-    }
     /* Child process: handle the actual request here */
 printf(">>> Starting child process >>> Line = %d PID = %d fd = %d\n", __LINE__, getpid(), fd);
     /* Ignore SIGHUP */
@@ -800,8 +802,11 @@ printf("%s: Line = %d PID = %d fd = %d\n", __FILE__, __LINE__, getpid(), fd);
 //    Not a thing in SPP
     tp = (struct tftphdr *)buf;
     tp_opcode = ntohs(tp->th_opcode);
-    if (tp_opcode == RRQ || tp_opcode == WRQ)
+    if (tp_opcode == RRQ || tp_opcode == WRQ){
         tftp(tp, n);
+    }
+
+    }
     printf("Exiting %s: line %d\n\r", __func__, __LINE__);
     _exit(0);
 }
@@ -937,8 +942,8 @@ printf("%s: Line = %d PID = %d\n", __FILE__, __LINE__, getpid());
         else
             (*pf->f_send) (pf, NULL, 0);
     }
-    printf("Exiting %s: line %d\n\r", __func__, __LINE__);
-    _exit(0);                    /* Request completed */
+    printf("Returning from %s: line %d\n\r", __func__, __LINE__);
+   return(0);                    /* Request completed */
 }
 
 static int blksize_set;
@@ -1402,6 +1407,7 @@ oack:
             block = rollover_val;
     } while (size == segsize);
 abort:
+    printf("%s: line: %d. Closing %d\n", __func__, __LINE__, file);
     (void)fclose(file);
 
     printf("Leaving tftp_sendfile. Line: %d\n", __LINE__);
@@ -1481,6 +1487,8 @@ send_ack:
         }
     } while (size == segsize);
     write_behind(file, pf->f_convert);
+    
+    printf("%s: line: %d. Closing %d\n", __func__, __LINE__, file);
     (void)fclose(file);         /* close data file */
 
     ap->th_opcode = htons((u_short) ACK);       /* send the "final" ack */
