@@ -177,6 +177,7 @@ void timer(int sig)
     printf("Exiting %s: line %d\n\r", __func__, __LINE__);
         _exit(0);
     }
+    printf("Jumping from %s: line %d\n\r", __func__, __LINE__);
     siglongjmp(timeoutbuf, 1);
 }
 
@@ -253,6 +254,7 @@ static int recv_time(int s, void *rbuf, int len, unsigned int flags,
     unsigned long timeout_us = *timeout_us_p;
     unsigned long timeout_left, dt;
 
+    printf("%s line: %d  s = %d\n",__func__, __LINE__, s);
     gettimeofday(&t0, NULL);
     timeout_left = timeout_us;
 
@@ -274,28 +276,39 @@ static int recv_time(int s, void *rbuf, int len, unsigned int flags,
             *timeout_us_p = timeout_left =
                 (dt >= timeout_us) ? 1 : (timeout_us - dt);
         } while (rv == -1 && err == EINTR);
+        
+        printf("%s line: %d rv = %d, dt = %lu \n",__func__, __LINE__, rv, dt);
 
         if (rv == 0) {
+            printf("%s line: %d \n",__func__, __LINE__);
             timer(0);           /* Should not return */
+            printf("%s line: %d \n",__func__, __LINE__);
             return -1;
         }
 
+        printf("%s line: %d  s = %d\n",__func__, __LINE__, s);
         set_socket_nonblock(s, 1);
         rv = recv(s, rbuf, len, flags);
         err = errno;
         set_socket_nonblock(s, 0);
 
+        printf("%s line: %d  s = %d\n",__func__, __LINE__, s);
         if (rv < 0) {
             if (E_WOULD_BLOCK(err) || err == EINTR) {
+                printf("%s line: %d  s = %d\n",__func__, __LINE__, s);
                 continue;       /* Once again, with feeling... */
             } else {
+                printf("%s line: %d  s = %d\n",__func__, __LINE__, s);
                 errno = err;
                 return rv;
             }
         } else {
+            printf("%s line: %d  s = %d\n",__func__, __LINE__, s);
             return rv;
         }
     }
+
+    printf("%s line: %d  s = %d\n",__func__, __LINE__, s);
 }
 
 // static int split_port(char **ap, char **pp)
@@ -1357,24 +1370,30 @@ oack:
         }
     }
 
+    printf("%s line: %d  peer = %d\n",__func__, __LINE__, peer);
     dp = r_init();
     do {
         size = readit(file, &dp, pf->f_convert);
         if (size < 0) {
+            printf("%s line: %d  peer = %d\n",__func__, __LINE__, peer);
             nak(errno + 100, NULL);
             goto abort;
         }
         dp->th_opcode = htons((u_short) DATA);
         dp->th_block = htons((u_short) block);
         timeout = rexmtval;
+        printf("%s line: %d  peer = %d\n",__func__, __LINE__, peer);
         (void)sigsetjmp(timeoutbuf, 1);
 
+        printf(">>>%s line: %d  peer = %d\n",__func__, __LINE__, peer);
         r_timeout = timeout;
         if (sendto(peer, dp, size + 4, 0,
                   (struct sockaddr*) &clientaddr, sizeof(struct sockaddr_spp)) != size + 4) {
+            printf("%s line: %d  peer = %d\n",__func__, __LINE__, peer);
             syslog(LOG_WARNING, "tftpd: write: - %s", strerror(errno));
             goto abort;
         }
+        printf("%s line: %d  peer = %d\n",__func__, __LINE__, peer);
         read_ahead(file, pf->f_convert);
         for (;;) {
             n = recv_time(peer, ackbuf, sizeof(ackbuf), 0, &r_timeout);
@@ -1403,8 +1422,10 @@ oack:
             }
 
         }
-        if (!++block)
+        printf("%s line: %d  peer = %d\n",__func__, __LINE__, peer);
+        if (!++block){
             block = rollover_val;
+        }
     } while (size == segsize);
 abort:
     printf("%s: line: %d. Closing %d\n", __func__, __LINE__, file);
