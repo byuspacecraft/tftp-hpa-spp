@@ -611,7 +611,7 @@ int main(int argc, char **argv)
     if (spec_umask || !unixperms)
         umask(my_umask);
     
-    syslog(LOG_DEBUG, "Starting loop");
+    syslog(LOG_USER|LOG_DEBUG, "Starting loop");
     while (1) {
         fd_set readset;
         struct timeval tv_waittime;
@@ -671,9 +671,9 @@ int main(int argc, char **argv)
             else /* not in set ??? */
                 continue;
         }
-        syslog(LOG_DEBUG, "tftp.c 673, waiting for request");
+        syslog(LOG_USER|LOG_DEBUG, "tftp.c 673, waiting for request");
         n = recvfrom(fd, buf, sizeof(buf), 0, NULL, 0);
-        syslog(LOG_DEBUG, "tftp.c 674, got request");
+        syslog(LOG_USER|LOG_DEBUG, "tftp.c 674, got request");
         if (n < 0) {
             if (E_WOULD_BLOCK(errno) || errno == EINTR) {
                 continue;       /* Again, from the top */
