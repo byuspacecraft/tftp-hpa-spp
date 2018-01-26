@@ -670,7 +670,9 @@ int main(int argc, char **argv)
             else /* not in set ??? */
                 continue;
         }
+        syslog(LOG_DEBUG, "tftp.c 673, waiting for request");
         n = recvfrom(fd, buf, sizeof(buf), 0, NULL, 0);
+        syslog(LOG_DEBUG, "tftp.c 674, got request");
         if (n < 0) {
             if (E_WOULD_BLOCK(errno) || errno == EINTR) {
                 continue;       /* Again, from the top */
