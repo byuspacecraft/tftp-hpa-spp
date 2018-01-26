@@ -556,6 +556,7 @@ int main(int argc, char **argv)
         clientaddr.sspp_family = AF_SPP;
         clientaddr.sspp_addr.spp_apid = ascii2spp(fromaddress);
 
+	printf("tftpd.c %d\n\r", __LINE__);
         if (fd4 >= 0) {
             if (bind(fd4, (struct sockaddr *)&bindaddr4,
                         sizeof(bindaddr4)) < 0) {
@@ -563,13 +564,15 @@ int main(int argc, char **argv)
                 exit(EX_OSERR);
             }
         }
-        /* Daemonize this process */
-        /* Note: when running in secure mode (-s), we must not chdir, since
-           we are already in the proper directory. */
-        if (!nodaemon && daemon(secure, 0) < 0) {
-            syslog(LOG_ERR, "cannot daemonize: - %s", strerror(errno));
-            exit(EX_OSERR);
-        }
+	printf("tftpd.c %d\n\r", __LINE__);
+//       /* Daemonize this process */
+//       /* Note: when running in secure mode (-s), we must not chdir, since
+//          we are already in the proper directory. */
+//       if (!nodaemon && daemon(secure, 0) < 0) {
+//           syslog(LOG_ERR, "cannot daemonize: - %s", strerror(errno));
+//           exit(EX_OSERR);
+//       }
+	printf("tftpd.c %d\n\r", __LINE__);
         set_signal(SIGTERM, handle_exit, 0);
         set_signal(SIGINT,  handle_exit, 0);
         if (pidfile) {
@@ -584,6 +587,7 @@ int main(int argc, char **argv)
                     syslog(LOG_ERR, "error closing pid file '%s': - %s", pidfile, strerror(errno));
             }
         }
+	printf("tftpd.c %d\n\r", __LINE__);
         if (fd6 > fd4)
             fdmax = fd6;
         else
@@ -611,7 +615,7 @@ int main(int argc, char **argv)
     if (spec_umask || !unixperms)
         umask(my_umask);
     
-    syslog(LOG_USER|LOG_DEBUG, "Starting loop");
+    printf( "tftp.c %d Starting loop\n\r", __LINE__);
     while (1) {
         fd_set readset;
         struct timeval tv_waittime;
