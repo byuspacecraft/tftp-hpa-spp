@@ -688,6 +688,7 @@ int main(int argc, char **argv)
          * Now that we have read the request packet from the UDP
          * socket, we fork and go back to listening to the socket.
          */
+        printf("\r\nForking...");
         pid = vfork();
         if (pid < 0) {
             syslog(LOG_ERR, "fork: - %s", strerror(errno));
