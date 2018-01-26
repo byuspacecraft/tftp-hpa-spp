@@ -559,7 +559,7 @@ int main(int argc, char **argv)
         if (fd4 >= 0) {
             if (bind(fd4, (struct sockaddr *)&bindaddr4,
                         sizeof(bindaddr4)) < 0) {
-                syslog(LOG_USER|LOG_ERR, "cannot bind to local SPP socket addr #%d - %s", bindaddr4.sspp_addr.spp_apid, strerror(errno));
+                syslog(LOG_ERR, "cannot bind to local SPP socket addr #%d - %s", bindaddr4.sspp_addr.spp_apid, strerror(errno));
                 exit(EX_OSERR);
             }
         }
