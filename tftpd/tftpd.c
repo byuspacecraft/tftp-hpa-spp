@@ -610,7 +610,8 @@ int main(int argc, char **argv)
     set_signal(SIGHUP, handle_sighup, 0);
     if (spec_umask || !unixperms)
         umask(my_umask);
-
+    
+    syslog(LOG_DEBUG, "Starting loop");
     while (1) {
         fd_set readset;
         struct timeval tv_waittime;
