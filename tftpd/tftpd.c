@@ -556,7 +556,6 @@ int main(int argc, char **argv)
         clientaddr.sspp_family = AF_SPP;
         clientaddr.sspp_addr.spp_apid = ascii2spp(fromaddress);
 
-	printf("tftpd.c %d\n\r", __LINE__);
         if (fd4 >= 0) {
             if (bind(fd4, (struct sockaddr *)&bindaddr4,
                         sizeof(bindaddr4)) < 0) {
@@ -564,7 +563,6 @@ int main(int argc, char **argv)
                 exit(EX_OSERR);
             }
         }
-	printf("tftpd.c %d\n\r", __LINE__);
 //       /* Daemonize this process */
 //       /* Note: when running in secure mode (-s), we must not chdir, since
 //          we are already in the proper directory. */
@@ -572,7 +570,6 @@ int main(int argc, char **argv)
 //           syslog(LOG_ERR, "cannot daemonize: - %s", strerror(errno));
 //           exit(EX_OSERR);
 //       }
-	printf("tftpd.c %d\n\r", __LINE__);
         set_signal(SIGTERM, handle_exit, 0);
         set_signal(SIGINT,  handle_exit, 0);
         if (pidfile) {
@@ -587,7 +584,6 @@ int main(int argc, char **argv)
                     syslog(LOG_ERR, "error closing pid file '%s': - %s", pidfile, strerror(errno));
             }
         }
-	printf("tftpd.c %d\n\r", __LINE__);
         if (fd6 > fd4)
             fdmax = fd6;
         else
@@ -614,8 +610,7 @@ int main(int argc, char **argv)
     set_signal(SIGHUP, handle_sighup, 0);
     if (spec_umask || !unixperms)
         umask(my_umask);
-    
-    printf( "tftp.c %d Starting loop\n\r", __LINE__);
+
     while (1) {
         fd_set readset;
         struct timeval tv_waittime;
@@ -675,9 +670,7 @@ int main(int argc, char **argv)
             else /* not in set ??? */
                 continue;
         }
-        syslog(LOG_USER|LOG_DEBUG, "tftp.c 673, waiting for request");
         n = recvfrom(fd, buf, sizeof(buf), 0, NULL, 0);
-        syslog(LOG_USER|LOG_DEBUG, "tftp.c 674, got request");
         if (n < 0) {
             if (E_WOULD_BLOCK(errno) || errno == EINTR) {
                 continue;       /* Again, from the top */
@@ -692,7 +685,6 @@ int main(int argc, char **argv)
          * Now that we have read the request packet from the UDP
          * socket, we fork and go back to listening to the socket.
          */
-        printf("\r\nForking...");
         pid = vfork();
         if (pid < 0) {
             syslog(LOG_ERR, "fork: - %s", strerror(errno));
