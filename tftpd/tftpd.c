@@ -563,13 +563,13 @@ int main(int argc, char **argv)
                 exit(EX_OSERR);
             }
         }
-        /* Daemonize this process */
-        /* Note: when running in secure mode (-s), we must not chdir, since
-           we are already in the proper directory. */
-        if (!nodaemon && daemon(secure, 0) < 0) {
-            syslog(LOG_ERR, "cannot daemonize: - %s", strerror(errno));
-            exit(EX_OSERR);
-        }
+//       /* Daemonize this process */
+//       /* Note: when running in secure mode (-s), we must not chdir, since
+//          we are already in the proper directory. */
+//       if (!nodaemon && daemon(secure, 0) < 0) {
+//           syslog(LOG_ERR, "cannot daemonize: - %s", strerror(errno));
+//           exit(EX_OSERR);
+//       }
         set_signal(SIGTERM, handle_exit, 0);
         set_signal(SIGINT,  handle_exit, 0);
         if (pidfile) {
